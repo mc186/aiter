@@ -17,11 +17,12 @@
 #pragma once
 
 #include <hip/hip_bf16.h>
-#include "hip_compat.h"
 
 #include <algorithm>
 #include <cfloat>
+
 #include "dtype_fp8.cuh"
+#include "hip_compat.h"
 #include "quant_utils.cuh"
 
 #if defined(__HIPCC__) && \

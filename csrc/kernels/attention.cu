@@ -21,29 +21,6 @@
 #include "ck_tile/host/hip_check_error.hpp"
 
 #include "paged_attention.hpp"
-
-
-/*
- * Copyright (c) 2024, The vLLM team.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-#include <torch/torch.h>
-
-#include <hip/hip_runtime.h>
-
-#include "paged_attention.hpp"
 #include "paged_attention_kernel.hpp"
 
 #define LAUNCH_CUSTOM_ATTENTION(GQA_RATIO)                        \
@@ -253,7 +230,6 @@ void paged_attention(const paged_attention_traits& traits,
     }
 }
 } // namespace native
-
 
 void paged_attention(
     torch::Tensor& out,         // [num_seqs, num_heads, head_size]
