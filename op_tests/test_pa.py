@@ -588,6 +588,5 @@ def test_paged_attention(
         f"[test] dim: {str((ctx_lens, num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, finished)\n")
 
 if __name__ == '__main__':
-    for ctx_len in [1, 26, 128, 4097]:
-        test_paged_attention(4097, 128, (8, 1), 128, False, 16,
-                             torch.bfloat16, "auto", 0, "cuda:0")
+    test_paged_attention(4097, 128, (8, 1), 128, False, 16,
+                         torch.bfloat16, "auto", 0, "cuda:0")
