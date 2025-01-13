@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Union
 import itertools
 import torch
 import ater
+import pytest
 from ater import paged_attn as ops
 from ater.test_common import checkAllclose, perftest, tensor_dump, tensor_load
 from ater import pertoken_quant
@@ -396,7 +397,16 @@ def asm_V_shuffle(VC):
     VC = VC.permute(0, 1, 3, 2, 4).contiguous()
     return VC
 
-
+@pytest.mark.parametrize('ctx_lens', [1, 26, 128, 4097])
+@pytest.mark.parametrize('num_seqs', [128])
+@pytest.mark.parametrize('num_heads', [(8, 1)])
+@pytest.mark.parametrize('head_size', [128])
+@pytest.mark.parametrize('use_alibi', [False])
+@pytest.mark.parametrize('block_size', [16])
+@pytest.mark.parametrize('dtype', [torch.bfloat16])
+@pytest.mark.parametrize('kv_cache_dtype', ['auto'])
+@pytest.mark.parametrize('seed', [0])
+@pytest.mark.parametrize('device', ['cuda:0'])
 def test_paged_attention(
     ctx_lens: int,
     num_seqs: int,
@@ -473,8 +483,8 @@ def test_paged_attention(
     )
     if debug_mode != VERIFY:
         out_golden = out_ater
-    checkAllclose(out_golden, out_ater,
-                  msg=f'golden vs ater_shomy:{time_ater}')
+    assert checkAllclose(out_golden, out_ater,
+                         msg=f'golden vs ater_shomy:{time_ater}')
     tensor_dump(out_ater, 'out_ater')
 
     out_ater_asm, time_ater_asm = run_ater_asm(
@@ -489,8 +499,8 @@ def test_paged_attention(
         scale,
         alibi_slopes
     )
-    checkAllclose(out_golden, out_ater_asm,
-                  msg=f'golden vs ater_asm:{time_ater_asm}')
+    assert checkAllclose(out_golden, out_ater_asm,
+                         msg=f'golden vs ater_asm:{time_ater_asm}')
     tensor_dump(out_ater, 'out_ater')
 
     for quant_algo_, cache_type_ in [(0, key_cache.dtype), (2, torch.float8_e4m3fnuz), (2, torch.int8)]:
@@ -518,8 +528,8 @@ def test_paged_attention(
             block_size,
             quant_algo_
         )
-        checkAllclose(out_golden, out_ater_naive,
-                      msg=f'golden vs ck_naive(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_naive}')
+        assert checkAllclose(out_golden, out_ater_naive,
+                             msg=f'golden vs ck_naive(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_naive}')
 
         if cache_type_ == torch.int8:
             out_ater_asm, time_ater_asm = run_ater_asm(
@@ -536,8 +546,8 @@ def test_paged_attention(
                 k_scale_,
                 v_scale_,
             )
-            checkAllclose(out_golden, out_ater_asm,
-                          msg=f'golden vs ater_asm(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_asm}')
+            assert checkAllclose(out_golden, out_ater_asm,
+                                 msg=f'golden vs ater_asm(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_asm}')
 
     if debug_mode == DUMP:
         dump_input(query,
@@ -568,16 +578,16 @@ def test_paged_attention(
     #     v_scale,
     #     num_queries_per_kv,
     # )
-    # checkAllclose(out_golden, out_native, msg='golden vs torch_native')
+    # assert checkAllclose(out_golden, out_native, msg='golden vs torch_native')
     # tensor_dump(out_native, 'out_native')
 
     # atol, rtol = 1e-2, 1e-2
     # msg = f"[perf] dim: {str((num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, {time_native=:<8.2f} us, {time_ater=:<8.2f} us, uplift: {time_native/time_ater-1:<5.1%}"
-    # checkAllclose(out_native, out_ater, atol=atol, rtol=rtol, msg=msg)
+    # assert checkAllclose(out_native, out_ater, atol=atol, rtol=rtol, msg=msg)
     print(
         f"[test] dim: {str((ctx_lens, num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, finished)\n")
 
-
-for ctx_len in [1, 26, 128, 4097]:
-    test_paged_attention(4097, 128, (8, 1), 128, False, 16,
-                         torch.bfloat16, "auto", 0, "cuda:0")
+if __name__ == '__main__':
+    for ctx_len in [1, 26, 128, 4097]:
+        test_paged_attention(4097, 128, (8, 1), 128, False, 16,
+                             torch.bfloat16, "auto", 0, "cuda:0")
