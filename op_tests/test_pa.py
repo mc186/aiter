@@ -277,7 +277,6 @@ def run_ater(query,
         v_scale,
     )
 
-
 @perftest()
 def run_ater_naive(query,
                    key_cache,
@@ -393,6 +392,11 @@ class InputSource(Enum):
     PreGen = 1
     Random = 2
 
+class PAVariant(Enum):
+    Shomy = 1
+    Asm   = 2
+    Naive = 3
+
 INPUT_SOURCE = InputSource.Random
 DUMP_INPUTS = False # whether to dump inputs
 DUMP_OUTPUT = False # whether to dump output
@@ -405,6 +409,8 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('block_size', [16])
 @pytest.mark.parametrize('dtype', [torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
+@pytest.mark.parametrize('pa_variant', [e for e in PAVariant])
+@pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
 @pytest.mark.parametrize('seed', [0])
 @pytest.mark.parametrize('device', ['cuda:0'])
 def test_paged_attention(
@@ -416,9 +422,17 @@ def test_paged_attention(
     block_size: int,
     dtype: torch.dtype,
     kv_cache_dtype: str,
+    pa_variant: PAVariant,
+    quant_cache_dtype: torch.dtype,
     seed: int,
     device: str
 ) -> None:
+    if pa_variant == PAVariant.Shomy and quant_cache_dtype is not None:
+        pytest.skip()
+
+    if pa_variant == PAVariant.Asm and quant_cache_dtype not in [None, torch.int8]:
+        pytest.skip()
+
     torch.set_default_device(device)
     # Using default kv_scale
     k_scale = v_scale = 1.0
@@ -485,71 +499,98 @@ def test_paged_attention(
             num_queries_per_kv,
         )
 
-    out_ater, time_ater = run_ater(
-        query,
-        key_cache,
-        value_cache,
-        block_tables,
-        seq_lens,
-        max_seq_len,
-        kv_cache_dtype,
-        num_kv_heads,
-        scale,
-        alibi_slopes,
-        k_scale,
-        v_scale,
-    )
-    assert checkAllclose(out_golden, out_ater,
-                         msg=f'golden vs ater:{time_ater}')
-    if DUMP_OUTPUT:
-        tensor_dump(out_ater, 'out_ater')
-
-    out_ater_asm, time_ater_asm = run_ater_asm(
-        query,
-        key_cache,
-        asm_V_shuffle(value_cache),
-        block_tables,
-        seq_lens,
-        max_seq_len,
-        kv_cache_dtype,
-        num_kv_heads,
-        scale,
-        alibi_slopes
-    )
-    assert checkAllclose(out_golden, out_ater_asm,
-                         msg=f'golden vs ater_asm:{time_ater_asm}')
-    if DUMP_OUTPUT:
-        tensor_dump(out_ater, 'out_ater_asm')
-
-    for quant_algo_, cache_type_ in [(0, key_cache.dtype), (2, torch.float8_e4m3fnuz), (2, torch.int8)]:
-        if quant_algo_ == 0:
+    if quant_cache_dtype is None:
+        if pa_variant == PAVariant.Shomy:
+            out_ater, time_ater = run_ater(
+                query,
+                key_cache,
+                value_cache,
+                block_tables,
+                seq_lens,
+                max_seq_len,
+                kv_cache_dtype,
+                num_kv_heads,
+                scale,
+                alibi_slopes,
+                k_scale,
+                v_scale,
+            )
+            assert checkAllclose(out_golden, out_ater,
+                                msg=f'golden vs ater:{time_ater}')
+            if DUMP_OUTPUT:
+                tensor_dump(out_ater, 'out_ater')
+        elif pa_variant == PAVariant.Asm:
+            out_ater_asm, time_ater_asm = run_ater_asm(
+                query,
+                key_cache,
+                asm_V_shuffle(value_cache),
+                block_tables,
+                seq_lens,
+                max_seq_len,
+                kv_cache_dtype,
+                num_kv_heads,
+                scale,
+                alibi_slopes
+            )
+            assert checkAllclose(out_golden, out_ater_asm,
+                                msg=f'golden vs ater_asm:{time_ater_asm}')
+            if DUMP_OUTPUT:
+                tensor_dump(out_ater, 'out_ater_asm')
+        else:
             k_quant_, k_scale_, v_quant_, v_scale_ = key_cache, torch.empty(
                 (0)), value_cache, torch.empty((0))
-        else:
-            k_quant_, k_scale_, v_quant_, v_scale_ = pertoken_quant_kvcache_symm(
-                key_cache, value_cache, quant_dtype=cache_type_)
-        out_ater_naive, time_ater_naive = run_ater_naive(
-            query,
-            k_quant_,
-            v_quant_,
-            block_tables,
-            seq_lens,
-            k_scale_,
-            v_scale_,
-            max_seq_len,
-            kv_cache_dtype,
-            num_kv_heads,
-            scale,
-            alibi_slopes,
-            k_scale,
-            v_scale,
-            block_size,
-            quant_algo_
-        )
-        assert checkAllclose(out_golden, out_ater_naive,
-                             msg=f'golden vs ck_naive(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_naive}')
 
-        if cache_type_ == torch.int8:
+            out_ater_naive, time_ater_naive = run_ater_naive(
+                query,
+                k_quant_,
+                v_quant_,
+                block_tables,
+                seq_lens,
+                k_scale_,
+                v_scale_,
+                max_seq_len,
+                kv_cache_dtype,
+                num_kv_heads,
+                scale,
+                alibi_slopes,
+                k_scale,
+                v_scale,
+                block_size,
+                0
+            )
+            assert checkAllclose(out_golden, out_ater_naive,
+                                msg=f'golden vs ck_naive(quant:0, kvcache:{key_cache.dtype}):{time_ater_naive}')
+
+            if DUMP_OUTPUT:
+                tensor_dump(out_ater, 'out_ater_asm')
+    else:
+        quant_algo = 2
+
+        k_quant_, k_scale_, v_quant_, v_scale_ = pertoken_quant_kvcache_symm(
+            key_cache, value_cache, quant_dtype=quant_cache_dtype)
+
+        if pa_variant == PAVariant.Naive:
+            out_ater_naive, time_ater_naive = run_ater_naive(
+                query,
+                k_quant_,
+                v_quant_,
+                block_tables,
+                seq_lens,
+                k_scale_,
+                v_scale_,
+                max_seq_len,
+                kv_cache_dtype,
+                num_kv_heads,
+                scale,
+                alibi_slopes,
+                k_scale,
+                v_scale,
+                block_size,
+                quant_algo
+            )
+            assert checkAllclose(out_golden, out_ater_naive,
+                                 msg=f'golden vs ck_naive(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_naive}')
+        elif pa_variant == PAVariant.Asm:
             out_ater_asm, time_ater_asm = run_ater_asm(
                 query,
                 k_quant_,
@@ -565,7 +606,7 @@ def test_paged_attention(
                 v_scale_,
             )
             assert checkAllclose(out_golden, out_ater_asm,
-                                 msg=f'golden vs ater_asm(quant:{quant_algo_}, kvcache:{cache_type_}):{time_ater_asm}')
+                                 msg=f'golden vs ater_asm(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_asm}')
 
     if DUMP_INPUTS:
         dump_input(query,
@@ -589,5 +630,16 @@ def test_paged_attention(
 
 if __name__ == '__main__':
     torch.set_printoptions(sci_mode=False)
-    test_paged_attention(4097, 128, (8, 1), 128, False, 16,
-                         torch.bfloat16, "auto", 0, "cuda:0")
+
+    for pa_variant, quant_cache_dtype in itertools.product(
+        [e for e in PAVariant], [None, torch.float8_e4m3fnuz, torch.int8]):
+
+        if pa_variant == PAVariant.Shomy and quant_cache_dtype is not None:
+            continue
+
+        if pa_variant == PAVariant.Asm and quant_cache_dtype not in [None, torch.int8]:
+            continue
+
+        test_paged_attention(4097, 128, (8, 1), 128, False, 16,
+                             torch.bfloat16, "auto", pa_variant, 
+                             quant_cache_dtype, 0, "cuda:0")
