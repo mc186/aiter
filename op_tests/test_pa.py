@@ -188,19 +188,19 @@ def pertoken_quant_kvcache_symm(
 # @perftest()
 
 
-def run_native(query,
-               key_cache,
-               value_cache,
-               block_tables,
-               seq_lens,
-               max_seq_len,
-               kv_cache_dtype,
-               num_kv_heads,
-               scale,
-               alibi_slopes,
-               k_scale,
-               v_scale,
-               num_queries_per_kv):
+def run_torch(query,
+              key_cache,
+              value_cache,
+              block_tables,
+              seq_lens,
+              max_seq_len,
+              kv_cache_dtype,
+              num_kv_heads,
+              scale,
+              alibi_slopes,
+              k_scale,
+              v_scale,
+              num_queries_per_kv):
     output = torch.zeros_like(query)
     num_query_heads = query.shape[1]
     num_kv_heads = value_cache.shape[1]
@@ -381,7 +381,7 @@ def load_input():
 
 
 DUMP = 1
-VERIFY = 2
+VERIFY = 2 # use pre-generated binaries as input & golden output
 # debug_mode = DUMP
 # debug_mode = VERIFY
 debug_mode = 0
@@ -434,6 +434,7 @@ def test_paged_attention(
     num_blocks = max_num_blocks_per_seq*num_seqs
     print(f'{debug_mode=}')
 
+    # prepare inputs & golden output
     if debug_mode == VERIFY:
         (query,
          key_cache,
@@ -445,9 +446,13 @@ def test_paged_attention(
         query = torch.empty(num_seqs, num_query_heads, head_size, dtype=dtype)
         query.uniform_(*uniform_range)
 
-        # seq_lens = [random.randint(1, MAX_SEQ_LEN) for _ in range(num_seqs)]
-        seq_lens = [ctx_lens for _ in range(num_seqs)]
-        seq_lens = torch.tensor(seq_lens, dtype=torch.int)
+        # Create the KV caches.
+        key_caches, value_caches = kv_cache_factory(num_blocks, block_size, 1,
+                                                    num_kv_heads, head_size,
+                                                    kv_cache_dtype, dtype, seed,
+                                                    device)
+
+        key_cache, value_cache = key_caches[0], value_caches[0]
 
         # Create the block tables.
         block_tables_lst: List[List[int]] = []
@@ -460,12 +465,25 @@ def test_paged_attention(
 
         block_tables = torch.tensor(block_tables_lst, dtype=torch.int)
 
-        # Create the KV caches.
-        key_caches, value_caches = kv_cache_factory(num_blocks, block_size, 1,
-                                                    num_kv_heads, head_size,
-                                                    kv_cache_dtype, dtype, seed,
-                                                    device)
-        key_cache, value_cache = key_caches[0], value_caches[0]
+        # seq_lens = [random.randint(1, MAX_SEQ_LEN) for _ in range(num_seqs)]
+        seq_lens = [ctx_lens for _ in range(num_seqs)]
+        seq_lens = torch.tensor(seq_lens, dtype=torch.int)
+
+        out_golden, _ = run_torch(
+            query,
+            key_cache,
+            value_cache,
+            block_tables,
+            seq_lens,
+            max_seq_len,
+            kv_cache_dtype,
+            num_kv_heads,
+            scale,
+            alibi_slopes,
+            k_scale,
+            v_scale,
+            num_queries_per_kv,
+        )
 
     out_ater, time_ater = run_ater(
         query,
@@ -481,10 +499,8 @@ def test_paged_attention(
         k_scale,
         v_scale,
     )
-    if debug_mode != VERIFY:
-        out_golden = out_ater
     assert checkAllclose(out_golden, out_ater,
-                         msg=f'golden vs ater_shomy:{time_ater}')
+                         msg=f'golden vs ater:{time_ater}')
     tensor_dump(out_ater, 'out_ater')
 
     out_ater_asm, time_ater_asm = run_ater_asm(
@@ -501,7 +517,7 @@ def test_paged_attention(
     )
     assert checkAllclose(out_golden, out_ater_asm,
                          msg=f'golden vs ater_asm:{time_ater_asm}')
-    tensor_dump(out_ater, 'out_ater')
+    tensor_dump(out_ater, 'out_ater_asm')
 
     for quant_algo_, cache_type_ in [(0, key_cache.dtype), (2, torch.float8_e4m3fnuz), (2, torch.int8)]:
         if quant_algo_ == 0:
@@ -562,24 +578,6 @@ def test_paged_attention(
                    alibi_slopes,
                    k_scale,
                    v_scale,)
-
-    # out_native, time_native = run_native(
-    #     query,
-    #     key_cache,
-    #     value_cache,
-    #     block_tables,
-    #     seq_lens,
-    #     max_seq_len,
-    #     kv_cache_dtype,
-    #     num_kv_heads,
-    #     scale,
-    #     alibi_slopes,
-    #     k_scale,
-    #     v_scale,
-    #     num_queries_per_kv,
-    # )
-    # assert checkAllclose(out_golden, out_native, msg='golden vs torch_native')
-    # tensor_dump(out_native, 'out_native')
 
     # atol, rtol = 1e-2, 1e-2
     # msg = f"[perf] dim: {str((num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, {time_native=:<8.2f} us, {time_ater=:<8.2f} us, uplift: {time_native/time_ater-1:<5.1%}"
