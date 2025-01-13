@@ -556,10 +556,9 @@ def test_paged_attention(
                 k_scale,
                 v_scale,
                 block_size,
-                0
             )
             assert checkAllclose(out_golden, out_ater_naive,
-                                msg=f'golden vs ck_naive(quant:0, kvcache:{key_cache.dtype}):{time_ater_naive}')
+                                msg=f'golden vs ck_naive:{time_ater_naive}')
 
             if DUMP_OUTPUT:
                 tensor_dump(out_ater, 'out_ater_asm')
@@ -589,7 +588,7 @@ def test_paged_attention(
                 quant_algo
             )
             assert checkAllclose(out_golden, out_ater_naive,
-                                 msg=f'golden vs ck_naive(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_naive}')
+                                msg=f'golden vs ck_naive(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_naive}')
         elif pa_variant == PAVariant.Asm:
             out_ater_asm, time_ater_asm = run_ater_asm(
                 query,
@@ -606,7 +605,7 @@ def test_paged_attention(
                 v_scale_,
             )
             assert checkAllclose(out_golden, out_ater_asm,
-                                 msg=f'golden vs ater_asm(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_asm}')
+                                msg=f'golden vs ater_asm(quant:{quant_algo}, kvcache:{quant_cache_dtype}):{time_ater_asm}')
 
     if DUMP_INPUTS:
         dump_input(query,
