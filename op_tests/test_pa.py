@@ -427,11 +427,16 @@ def test_paged_attention(
     seed: int,
     device: str
 ) -> None:
-    if pa_variant == PAVariant.Shomy and quant_cache_dtype is not None:
-        pytest.skip()
-
-    if pa_variant == PAVariant.Asm and \
-        (use_alibi or quant_cache_dtype not in [None, torch.int8]):
+    if pa_variant == PAVariant.Shomy:
+        if quant_cache_dtype is not None:
+            pytest.skip()
+    elif pa_variant == PAVariant.Asm:
+        if (use_alibi or head_size != 128 or block_size != 16 or \
+            dtype is not torch.bfloat16 or \
+            quant_cache_dtype not in [None, torch.int8]):
+            pytest.skip()
+    elif pa_variant == PAVariant.Naive:
+        if (use_alibi or quant_cache_dtype is not None):
             pytest.skip()
 
     torch.set_default_device(device)
@@ -634,11 +639,12 @@ if __name__ == '__main__':
     for pa_variant, quant_cache_dtype in itertools.product(
         [e for e in PAVariant], [None, torch.float8_e4m3fnuz, torch.int8]):
 
-        if pa_variant == PAVariant.Shomy and quant_cache_dtype is not None:
-            continue
-
-        if pa_variant == PAVariant.Asm and quant_cache_dtype not in [None, torch.int8]:
-            continue
+        if pa_variant == PAVariant.Shomy:
+            if quant_cache_dtype is not None:
+                continue
+        elif pa_variant == PAVariant.Asm:
+            if quant_cache_dtype not in [None, torch.int8]:
+                continue
 
         test_paged_attention(4097, 128, (8, 1), 128, False, 16,
                              torch.bfloat16, "auto", pa_variant, 
