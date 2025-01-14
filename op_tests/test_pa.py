@@ -634,8 +634,8 @@ def test_paged_attention(
     # atol, rtol = 1e-2, 1e-2
     # msg = f"[perf] dim: {str((num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, {time_native=:<8.2f} us, {time_ater=:<8.2f} us, uplift: {time_native/time_ater-1:<5.1%}"
     # assert checkAllclose(out_native, out_ater, atol=atol, rtol=rtol, msg=msg)
-    print(
-        f"[test] dim: {str((ctx_lens, num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, finished)\n")
+    # print(
+    #     f"[test] dim: {str((ctx_lens, num_seqs, num_heads, head_size)):<20}, dtype: {dtype}, finished)\n")
 
 if __name__ == '__main__':
     torch.set_printoptions(sci_mode=False)
