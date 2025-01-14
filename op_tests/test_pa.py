@@ -64,7 +64,7 @@ def kv_cache_factory(
     torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
 
     scale = head_size**-0.5
-    x = 16 // torch.tensor([], dtype=torch_dtype).element_size()
+    x = 16 // torch_dtype.itemsize
     key_cache_shape = (num_blocks, num_heads, head_size // x, block_size, x)
     key_caches: List[torch.Tensor] = []
     for _ in range(num_layers):
@@ -323,6 +323,7 @@ def run_ater_asm(query,
                  num_kv_heads,
                  scale,
                  alibi_slopes,
+                 max_num_blocks,
                  k_scale=None,
                  v_scale=None):
     return ater.pa_fwd_asm(
@@ -331,6 +332,7 @@ def run_ater_asm(query,
         value_cache,
         block_tables,
         seq_lens,
+        max_num_blocks,
         k_scale,
         v_scale
     )
@@ -431,12 +433,12 @@ def test_paged_attention(
         if quant_cache_dtype is not None:
             pytest.skip()
     elif pa_variant == PAVariant.Asm:
-        if (use_alibi or head_size != 128 or block_size != 16 or \
+        if use_alibi or head_size != 128 or block_size != 16 or \
             dtype is not torch.bfloat16 or \
-            quant_cache_dtype not in [None, torch.int8]):
+            quant_cache_dtype not in [None, torch.int8]:
             pytest.skip()
     elif pa_variant == PAVariant.Naive:
-        if (use_alibi or quant_cache_dtype is not None):
+        if use_alibi:
             pytest.skip()
 
     torch.set_default_device(device)
@@ -536,7 +538,8 @@ def test_paged_attention(
                 kv_cache_dtype,
                 num_kv_heads,
                 scale,
-                alibi_slopes
+                alibi_slopes,
+                max_num_blocks_per_seq
             )
             assert checkAllclose(out_golden, out_ater_asm,
                                 msg=f'golden vs ater_asm:{time_ater_asm}')
@@ -607,6 +610,7 @@ def test_paged_attention(
                 num_kv_heads,
                 scale,
                 alibi_slopes,
+                max_num_blocks_per_seq,
                 k_scale_,
                 v_scale_,
             )
@@ -636,8 +640,10 @@ def test_paged_attention(
 if __name__ == '__main__':
     torch.set_printoptions(sci_mode=False)
 
-    for pa_variant, quant_cache_dtype in itertools.product(
-        [e for e in PAVariant], [None, torch.float8_e4m3fnuz, torch.int8]):
+    for ctx_len, pa_variant, quant_cache_dtype in itertools.product(
+        [1, 26, 128, 4097],
+        [e for e in PAVariant],
+        [None, torch.float8_e4m3fnuz, torch.int8]):
 
         if pa_variant == PAVariant.Shomy:
             if quant_cache_dtype is not None:
@@ -646,6 +652,6 @@ if __name__ == '__main__':
             if quant_cache_dtype not in [None, torch.int8]:
                 continue
 
-        test_paged_attention(4097, 128, (8, 1), 128, False, 16,
+        test_paged_attention(ctx_len, 128, (8, 1), 128, False, 16,
                              torch.bfloat16, "auto", pa_variant, 
                              quant_cache_dtype, 0, "cuda:0")
