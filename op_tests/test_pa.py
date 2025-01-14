@@ -404,10 +404,10 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('ctx_lens', [1, 26, 128, 4097])
 @pytest.mark.parametrize('num_seqs', [128])
 @pytest.mark.parametrize('num_heads', [(8, 1)])
-@pytest.mark.parametrize('head_size', [128])
-@pytest.mark.parametrize('use_alibi', [False])
-@pytest.mark.parametrize('block_size', [16])
-@pytest.mark.parametrize('dtype', [torch.bfloat16])
+@pytest.mark.parametrize('head_size', [64, 128])
+@pytest.mark.parametrize('use_alibi', [False, True])
+@pytest.mark.parametrize('block_size', [16, 32])
+@pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
 @pytest.mark.parametrize('pa_variant', [e for e in PAVariant])
 @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
@@ -430,8 +430,9 @@ def test_paged_attention(
     if pa_variant == PAVariant.Shomy and quant_cache_dtype is not None:
         pytest.skip()
 
-    if pa_variant == PAVariant.Asm and quant_cache_dtype not in [None, torch.int8]:
-        pytest.skip()
+    if pa_variant == PAVariant.Asm and \
+        (use_alibi or quant_cache_dtype not in [None, torch.int8]):
+            pytest.skip()
 
     torch.set_default_device(device)
     # Using default kv_scale
