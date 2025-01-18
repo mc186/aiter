@@ -8,6 +8,7 @@ from ater import paged_attn as ops
 from ater.test_common import checkAllclose, perftest, tensor_dump, tensor_load
 from ater import pertoken_quant
 from enum import Enum
+from einops import rearrange
 
 uniform_range = (-1, 1)
 STR_DTYPE_TO_TORCH_DTYPE = {
@@ -248,6 +249,65 @@ def run_torch(query,
         output[i].copy_(out, non_blocking=True)
     return output, 1
 
+
+def run_torch_new(query,
+              key_cache,
+              value_cache,
+              block_tables,
+              seq_lens,
+              max_seq_len,
+              kv_cache_dtype,
+              num_kv_heads,
+              scale,
+              alibi_slopes,
+              k_scale,
+              v_scale,
+              num_queries_per_kv):
+    output = torch.zeros_like(query)
+    num_query_heads = query.shape[1]
+    num_kv_heads = value_cache.shape[1]
+    head_size = value_cache.shape[2]
+    block_size = value_cache.shape[3]
+    num_seqs = query.shape[0]
+
+    block_tables_lst = block_tables.cpu().tolist()
+    seq_lens_lst = seq_lens.cpu().tolist()
+    for i in range(num_seqs):
+        q = query[i].unsqueeze(0)
+        block_table = block_tables_lst[i]
+        seq_len = int(seq_lens_lst[i])
+
+        keys_lst: List[torch.Tensor] = []
+        values_lst: List[torch.Tensor] = []
+        for j in range(seq_len):
+            block_number = int(block_table[j // block_size])
+            block_offset = j % block_size
+
+            k = key_cache[block_number, :, block_offset, :]
+            k = k.reshape(num_kv_heads, head_size)
+            keys_lst.append(k)
+
+            v = value_cache[block_number, :, :, block_offset]
+            values_lst.append(v)
+        keys = torch.stack(keys_lst, dim=0)
+        values = torch.stack(values_lst, dim=0)
+        if num_queries_per_kv > 1:
+            # Handle MQA and GQA
+            keys = torch.repeat_interleave(keys, num_queries_per_kv, dim=1)
+            values = torch.repeat_interleave(values, num_queries_per_kv, dim=1)
+
+        alibi_bias = None
+        if alibi_slopes is not None:
+            # Create the ALiBi bias used in the paged attention kernel.
+            position_ids = torch.arange(seq_len).int()
+            alibi_bias = (position_ids - seq_len + 1).float()
+            alibi_bias = alibi_slopes.view(-1, 1, 1) * alibi_bias.view(
+                1, 1, -1)
+
+        out = ref_masked_attention(q, keys, values, scale, alibi_bias)
+        out = out.view(num_query_heads, head_size)
+        output[i].copy_(out, non_blocking=True)
+    return output, 1
 
 @perftest()
 def run_ater(query,
@@ -492,9 +552,10 @@ def test_paged_attention(
         seq_lens = torch.tensor(seq_lens, dtype=torch.int)
 
         if pa_variant == PAVariant.Shomy:
-            out_golden, _ = run_torch(
+            key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
+            out_golden, _ = run_torch_new(
                 query,
-                key_cache,
+                key_cache_new,
                 value_cache,
                 block_tables,
                 seq_lens,
