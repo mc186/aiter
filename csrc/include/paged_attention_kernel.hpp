@@ -286,6 +286,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
     const int q_stride,
     const int kv_block_stride,
     const int kv_head_stride,
+    const int kv_seq_stride,
     float* __restrict__ exp_sums,   // [num_seqs, num_heads, max_num_partitions]
     float* __restrict__ max_logits, // [num_seqs, num_heads,
                                     // max_num_partitions]
@@ -425,7 +426,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
                 Klocal[d] = k_ptrh8[d * BLOCK_SIZE + physical_block_offset];
             }
             #else // new layout, head_size is fastest dimension
-            const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr + physical_block_offset * HEAD_SIZE);
+            const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr + physical_block_offset * kv_seq_stride);
 #pragma unroll
             for(int d = 0; d < KHELOOP; d++)
             {
@@ -1110,6 +1111,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
     const int q_stride,
     const int kv_block_stride,
     const int kv_head_stride,
+    const int kv_seq_stride,
     float* __restrict__ exp_sums,   // [num_seqs, num_heads, max_num_partitions]
     float* __restrict__ max_logits, // [num_seqs, num_heads,
                                     // max_num_partitions]

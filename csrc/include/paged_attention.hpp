@@ -39,6 +39,7 @@ struct paged_attention_args
     int q_stride;
     int kv_block_stride;
     int kv_head_stride;
+    int kv_seq_stride;
 
     // NOTE: alibi_slopes is optional.
     const float* alibi_slopes_ptr;

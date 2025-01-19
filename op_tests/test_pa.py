@@ -555,6 +555,7 @@ def test_paged_attention(
         seq_lens = [ctx_lens for _ in range(num_seqs)]
         seq_lens = torch.tensor(seq_lens, dtype=torch.int)
 
+        # generate golden output
         if pa_variant == PAVariant.Shomy:
             key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
             out_golden, _ = run_torch_new(
@@ -574,6 +575,8 @@ def test_paged_attention(
             )
         else:
             key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
+            if kv_cache_layout == 'NHD':
+                key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
             out_golden, _ = run_ater(
                 query,
                 key_cache_new.contiguous(),
@@ -592,6 +595,8 @@ def test_paged_attention(
 
     if quant_cache_dtype is None:
         if pa_variant == PAVariant.Shomy:
+            if kv_cache_layout == 'NHD':
+                key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
             out_ater, time_ater = run_ater(
                 query,
                 key_cache_new.contiguous(),

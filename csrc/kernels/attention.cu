@@ -44,6 +44,7 @@
                                      args.q_stride,               \
                                      args.kv_block_stride,        \
                                      args.kv_head_stride,         \
+                                     args.kv_seq_stride,          \
                                      args.exp_sums_ptr,           \
                                      args.max_logits_ptr,         \
                                      tmp_out_ptr,                 \
@@ -237,7 +238,8 @@ void paged_attention(
     torch::Tensor& max_logits,  // [num_seqs, num_heads, max_num_partitions]
     torch::Tensor& tmp_out,     // [num_seqs, num_heads, max_num_partitions, head_size]
     torch::Tensor& query,       // [num_seqs, num_heads, head_size]
-    torch::Tensor& key_cache,   // [num_blocks, num_heads, head_size/x, block_size, x]
+    torch::Tensor& key_cache,   // [num_blocks, num_heads, block_size, head_size] or 
+                                // [num_blocks, block_size, num_heads, head_size]
     torch::Tensor& value_cache, // [num_blocks, num_heads, head_size, block_size]
     int64_t num_kv_heads,
     double scale,
@@ -267,7 +269,8 @@ void paged_attention(
     args.max_num_blocks_per_seq = block_tables.size(1);
     args.q_stride               = query.stride(0);
     args.kv_block_stride        = key_cache.stride(0);
-    args.kv_head_stride         = key_cache.stride(1);
+    args.kv_head_stride         = kv_cache_layout == "HND" ? key_cache.stride(1) : key_cache.stride(2);
+    args.kv_seq_stride          = kv_cache_layout == "HND" ? key_cache.stride(2) : key_cache.stride(1);
 
     // NOTE: alibi_slopes is optional.
     args.alibi_slopes_ptr =
