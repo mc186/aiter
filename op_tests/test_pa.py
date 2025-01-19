@@ -265,9 +265,9 @@ def run_torch_new(query,
               num_queries_per_kv):
     output = torch.zeros_like(query)
     num_query_heads = query.shape[1]
-    num_kv_heads = value_cache.shape[1]
-    head_size = value_cache.shape[2]
-    block_size = value_cache.shape[3]
+    num_kv_heads = key_cache.shape[1]
+    block_size = key_cache.shape[2]
+    head_size = key_cache.shape[3]
     num_seqs = query.shape[0]
 
     block_tables_lst = block_tables.cpu().tolist()
@@ -473,7 +473,7 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('block_size', [16, 32])
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
-@pytest.mark.parametrize('kv_cache_dtype', ['NHD', 'HND'])
+@pytest.mark.parametrize('kv_cache_layout', ['NHD', 'HND'])
 @pytest.mark.parametrize('pa_variant', [e for e in PAVariant])
 @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
 @pytest.mark.parametrize('seed', [0])
