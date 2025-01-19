@@ -417,12 +417,21 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
                                           // is already cast as _H8
         if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
         {
+            #if 0 // old layout
             const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr);
 #pragma unroll
             for(int d = 0; d < KHELOOP; d++)
             {
                 Klocal[d] = k_ptrh8[d * BLOCK_SIZE + physical_block_offset];
             }
+            #else // new layout, head_size is fastest dimension
+            const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr + physical_block_offset * HEAD_SIZE);
+#pragma unroll
+            for(int d = 0; d < KHELOOP; d++)
+            {
+                Klocal[d] = k_ptrh8[d];
+            }
+            #endif
         }
         else
         {

@@ -569,9 +569,10 @@ def test_paged_attention(
                 num_queries_per_kv,
             )
         else:
+            key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
             out_golden, _ = run_ater(
                 query,
-                key_cache,
+                key_cache_new.contiguous(),
                 value_cache,
                 block_tables,
                 seq_lens,
@@ -588,7 +589,7 @@ def test_paged_attention(
         if pa_variant == PAVariant.Shomy:
             out_ater, time_ater = run_ater(
                 query,
-                key_cache,
+                key_cache_new.contiguous(),
                 value_cache,
                 block_tables,
                 seq_lens,
