@@ -287,7 +287,7 @@ def run_torch_new(query,
             k = k.reshape(num_kv_heads, head_size)
             keys_lst.append(k)
 
-            v = value_cache[block_number, :, :, block_offset]
+            v = value_cache[block_number, :, block_offset, :]
             values_lst.append(v)
         keys = torch.stack(keys_lst, dim=0)
         values = torch.stack(values_lst, dim=0)
@@ -558,10 +558,11 @@ def test_paged_attention(
         # generate golden output
         if pa_variant == PAVariant.Shomy:
             key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
+            value_cache_new = rearrange(value_cache, 'b h d s -> b h s d')
             out_golden, _ = run_torch_new(
                 query,
                 key_cache_new,
-                value_cache,
+                value_cache_new,
                 block_tables,
                 seq_lens,
                 max_seq_len,
