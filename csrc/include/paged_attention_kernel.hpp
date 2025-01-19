@@ -274,7 +274,7 @@ template <typename scalar_t,
 __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
     const scalar_t* __restrict__ q,      // [num_seqs, num_heads, head_size]
     const cache_t* __restrict__ k_cache, // [num_blocks, num_kv_heads,
-                                         // head_size/x, block_size, x]
+                                         // block_size, head_size] or [num_blocks, block_size, num_kv_heads, head_size]
     const cache_t* __restrict__ v_cache, // [num_blocks, num_kv_heads,
                                          // head_size, block_size]
     const int num_kv_heads,

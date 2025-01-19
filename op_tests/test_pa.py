@@ -317,6 +317,7 @@ def run_ater(query,
              seq_lens,
              max_seq_len,
              kv_cache_dtype,
+             kv_cache_layout,
              num_kv_heads,
              scale,
              alibi_slopes,
@@ -330,6 +331,7 @@ def run_ater(query,
         seq_lens,
         max_seq_len,
         kv_cache_dtype,
+        kv_cache_layout,
         num_kv_heads,
         scale,
         alibi_slopes,
@@ -471,6 +473,7 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('block_size', [16, 32])
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
+@pytest.mark.parametrize('kv_cache_dtype', ['NHD', 'HND'])
 @pytest.mark.parametrize('pa_variant', [e for e in PAVariant])
 @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
 @pytest.mark.parametrize('seed', [0])
@@ -484,6 +487,7 @@ def test_paged_attention(
     block_size: int,
     dtype: torch.dtype,
     kv_cache_dtype: str,
+    kv_cache_layout: str,
     pa_variant: PAVariant,
     quant_cache_dtype: torch.dtype,
     seed: int,
@@ -578,6 +582,7 @@ def test_paged_attention(
                 seq_lens,
                 max_seq_len,
                 kv_cache_dtype,
+                kv_cache_layout,
                 num_kv_heads,
                 scale,
                 alibi_slopes,
@@ -595,6 +600,7 @@ def test_paged_attention(
                 seq_lens,
                 max_seq_len,
                 kv_cache_dtype,
+                kv_cache_layout,
                 num_kv_heads,
                 scale,
                 alibi_slopes,
@@ -731,5 +737,5 @@ if __name__ == '__main__':
                 continue
 
         test_paged_attention(ctx_len, 128, (8, 1), 128, False, 16,
-                             torch.bfloat16, "auto", pa_variant, 
+                             torch.bfloat16, "auto", 'HND', pa_variant, 
                              quant_cache_dtype, 0, "cuda:0")

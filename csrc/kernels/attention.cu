@@ -247,6 +247,7 @@ void paged_attention(
     int64_t max_context_len,
     const c10::optional<torch::Tensor>& alibi_slopes,
     const std::string& kv_cache_dtype,
+    const std::string& kv_cache_layout,
     double k_scale,
     double v_scale,
     const c10::optional<torch::Tensor>& fp8_out_scale,
