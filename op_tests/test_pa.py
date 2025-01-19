@@ -328,7 +328,7 @@ def run_ater(query,
     fp8_out_scale = None
 
     num_seqs, num_heads, head_size = query.shape
-    block_size = value_cache.shape[3]
+    block_size = key_cache.shape[2 if kv_cache_layout == 'HND' else 1]
     gqa_ratio = num_heads // num_kv_heads
 
     output = torch.empty_like(query)
