@@ -323,21 +323,61 @@ def run_ater(query,
              alibi_slopes,
              k_scale,
              v_scale,):
-    return ops.PagedAttention.forward_decode(
+    # copied from ops.PagedAttention.forward_decode()
+    _PARTITION_SIZE_ROCM = 256
+    fp8_out_scale = None
+
+    num_seqs, num_heads, head_size = query.shape
+    block_size = value_cache.shape[3]
+    gqa_ratio = num_heads // num_kv_heads
+
+    output = torch.empty_like(query)
+    max_num_partitions = (
+        (max_seq_len + _PARTITION_SIZE_ROCM - 1) //
+        _PARTITION_SIZE_ROCM)
+    assert _PARTITION_SIZE_ROCM % block_size == 0
+    tmp_output = torch.empty(
+        size=(num_seqs, num_heads, max_num_partitions, head_size),
+        dtype=output.dtype,
+        device=output.device,
+    )
+    exp_sums = torch.empty(
+        size=(num_seqs, num_heads, max_num_partitions),
+        dtype=torch.float32,
+        device=output.device,
+    )
+    max_logits = torch.empty_like(exp_sums)
+    cpa_fp8_out = False
+    if fp8_out_scale is not None:
+        output = torch.empty_like(output,
+                                dtype=torch.float8_e4m3fnuz)
+        cpa_fp8_out = True
+    ater.paged_attention_rocm(
+        output,
+        exp_sums,
+        max_logits,
+        tmp_output,
         query,
         key_cache,
         value_cache,
-        block_tables,
-        seq_lens,
-        max_seq_len,
-        kv_cache_dtype,
-        kv_cache_layout,
         num_kv_heads,
         scale,
+        block_tables,
+        seq_lens,
+        block_size,
+        max_seq_len,
         alibi_slopes,
+        kv_cache_dtype,
+        kv_cache_layout,
         k_scale,
         v_scale,
+        fp8_out_scale if cpa_fp8_out else None,
+        _PARTITION_SIZE_ROCM,
     )
+    if cpa_fp8_out:
+        return output.view(num_seqs, num_heads * head_size)
+    else:
+        return output
 
 @perftest()
 def run_ater_naive(query,
@@ -578,10 +618,12 @@ def test_paged_attention(
             key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
             if kv_cache_layout == 'NHD':
                 key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
+            
+            value_cache_new = rearrange(value_cache, 'b h d s -> b h s d')
             out_golden, _ = run_ater(
                 query,
                 key_cache_new.contiguous(),
-                value_cache,
+                value_cache_new.contiguous(),
                 block_tables,
                 seq_lens,
                 max_seq_len,
@@ -601,7 +643,7 @@ def test_paged_attention(
             out_ater, time_ater = run_ater(
                 query,
                 key_cache_new.contiguous(),
-                value_cache,
+                value_cache_new.contiguous(),
                 block_tables,
                 seq_lens,
                 max_seq_len,
