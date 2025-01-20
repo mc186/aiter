@@ -545,7 +545,10 @@ def test_paged_attention(
         if use_alibi:
             pytest.skip()
 
+    torch.manual_seed(seed)
+    random.seed(seed)
     torch.set_default_device(device)
+
     # Using default kv_scale
     k_scale = v_scale = 1.0
     scale = float(1.0 / (head_size**0.5))
@@ -581,15 +584,11 @@ def test_paged_attention(
         key_cache, value_cache = key_caches[0], value_caches[0]
 
         # Create the block tables.
-        block_tables_lst: List[List[int]] = []
-        for _ in range(num_seqs):
-            block_table = [
-                random.randint(0, num_blocks - 1)
-                for _ in range(max_num_blocks_per_seq)
-            ]
-            block_tables_lst.append(block_table)
-
-        block_tables = torch.tensor(block_tables_lst, dtype=torch.int)
+        block_tables = rearrange(
+            torch.randperm(num_blocks, dtype=torch.int32, device=device),
+            "(b nblocks) -> b nblocks",
+            b=num_seqs,
+        )
 
         # seq_lens = [random.randint(1, MAX_SEQ_LEN) for _ in range(num_seqs)]
         seq_lens = [ctx_lens for _ in range(num_seqs)]
