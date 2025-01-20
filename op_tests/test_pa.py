@@ -615,10 +615,12 @@ def test_paged_attention(
             )
         else:
             key_cache_new = rearrange(key_cache, 'b h d1 s d2 -> b h s (d1 d2)')
+            value_cache_new = rearrange(value_cache, 'b h d s -> b h s d')
+
             if kv_cache_layout == 'NHD':
                 key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
-            
-            value_cache_new = rearrange(value_cache, 'b h d s -> b h s d')
+                value_cache_new = rearrange(value_cache_new, 'b h s d -> b s h d')
+
             out_golden, _ = run_ater(
                 query,
                 key_cache_new.contiguous(),
@@ -639,6 +641,8 @@ def test_paged_attention(
         if pa_variant == PAVariant.Shomy:
             if kv_cache_layout == 'NHD':
                 key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
+                value_cache_new = rearrange(value_cache_new, 'b h s d -> b s h d')
+
             out_ater, time_ater = run_ater(
                 query,
                 key_cache_new.contiguous(),
