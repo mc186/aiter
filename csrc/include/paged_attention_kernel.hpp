@@ -1163,9 +1163,8 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma4_k
                     // iterate over all velems within block
                     for(int d = 0; d < BLOCK_SIZE / 8; d++)
                     {
-                        bit16_t elems[8];
-
                         // read data points individually and save them into array
+                        bit16_t elems[8];
                         for(int d2 = 0; d2 < 8; d2++)
                         {
                             const int elem_offset = (d * 8 + d2) * kv_seq_stride + head_size_elem;
