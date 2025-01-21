@@ -1106,10 +1106,11 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma4_k
         // scalar_t for fp8
         if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
         {
-            const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr);
+            const _B16x8* k_ptrh8 =
+                reinterpret_cast<const _B16x8*>(k_ptr + physical_block_offset * kv_seq_stride);
             for(int d = 0; d < KHELOOP; d++)
             {
-                Klocal[d] = k_ptrh8[d * BLOCK_SIZE + physical_block_offset];
+                Klocal[d] = k_ptrh8[d];
             }
         }
         else
@@ -1159,7 +1160,19 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma4_k
                     // iterate over all velems within block
                     for(int d = 0; d < BLOCK_SIZE / 8; d++)
                     {
-                        Vlocal[h][b * BLOCK_SIZE / 8 + d] = v_ptrh8be[d];
+                        bit16_t elems[8];
+
+                        // read each data points individually and save them into array
+                        for(int d2 = 0; d2 < 8; d2++)
+                        {
+                            const int elem_offset = (d * 8 + d2) * kv_seq_stride + head_size_elem;
+                            const bit16_t* elem =
+                                reinterpret_cast<const bit16_t*>(v_ptrh8b) + elem_offset;
+                            elems[d2] = *elem;
+                        }
+
+                        // copy all the read data points together
+                        Vlocal[h][b * BLOCK_SIZE / 8 + d] = *reinterpret_cast<const _B16x8*>(elems);
                     }
                 }
             }
