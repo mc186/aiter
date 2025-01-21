@@ -650,6 +650,7 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
                 const cache_t* v_fetch_ptr =
                     v_ptr3 + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD * kv_seq_stride;
 
+                // read data points individually and save them into array
                 cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
                 for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
                 {
@@ -657,6 +658,7 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
                     elems[d2]           = *elem;
                 }
 
+                // copy all the read data points together
                 Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
                     *reinterpret_cast<const _B16x8*>(elems);
             }
@@ -1163,7 +1165,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma4_k
                     {
                         bit16_t elems[8];
 
-                        // read each data points individually and save them into array
+                        // read data points individually and save them into array
                         for(int d2 = 0; d2 < 8; d2++)
                         {
                             const int elem_offset = (d * 8 + d2) * kv_seq_stride + head_size_elem;
