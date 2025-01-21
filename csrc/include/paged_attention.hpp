@@ -58,8 +58,8 @@ struct paged_attention_args
     int64_t block_size;
     int64_t max_context_len;
     double scale;
-    double k_scale;
-    double v_scale;
+    const float* k_scale_ptr;
+    const float* v_scale_ptr;
     int64_t partition_size;
 };
 
