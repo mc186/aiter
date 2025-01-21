@@ -418,24 +418,16 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
                                           // is already cast as _H8
         if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
         {
-            #if 0 // old layout, block_size is fastest dimension
-            const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr);
-#pragma unroll
-            for(int d = 0; d < KHELOOP; d++)
-            {
-                Klocal[d] = k_ptrh8[d * BLOCK_SIZE + physical_block_offset];
-            }
-            #else // new layout, head_size is fastest dimension
             const _B16x8* k_ptrh8 = reinterpret_cast<const _B16x8*>(k_ptr + physical_block_offset * kv_seq_stride);
 #pragma unroll
             for(int d = 0; d < KHELOOP; d++)
             {
                 Klocal[d] = k_ptrh8[d];
             }
-            #endif
         }
         else
         {
+            /// TODO: handle HND/NHD layout
             constexpr int X       = 16 / sizeof(cache_t);
             const cache_t* k_ptr2 = k_ptr + physical_block_offset * X;
 #pragma unroll
@@ -477,31 +469,6 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
         const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride;
         if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
         {
-            #if 0 // old layout, block_size is fastest dimension
-            const _B16x8* v_ptrh8 = reinterpret_cast<const _B16x8*>(v_ptr);
-            // iterate over each v block
-#pragma unroll
-            for(int b = 0; b < VBLOCKS; b++)
-            {
-                // int32 physical_block_number leads to overflow when multiplied with
-                // kv_block_stride
-                const int64_t vphysical_block_number = static_cast<int64_t>(vphysical_blocks[b]);
-                const _B16x8* v_ptrh8b = v_ptrh8 + (vphysical_block_number * kv_block_stride) / 8;
-                // iterate over each head elem (within head_size)
-#pragma unroll
-                for(int h = 0; h < VHELOOP; h++)
-                {
-                    const int head_size_elem = h * WARP_SIZE + laneid;
-                    const _B16x8* v_ptrh8be  = v_ptrh8b + head_size_elem * BLOCK_SIZE / 8;
-                    // iterate over all velems within block
-#pragma unroll
-                    for(int d = 0; d < BLOCK_SIZE / 8; d++)
-                    {
-                        Vlocal[h][b * BLOCK_SIZE / 8 + d] = v_ptrh8be[d];
-                    }
-                }
-            }
-            #else // new layout, head_size is fastest dimension
             const _B16x8* v_ptrh8 = reinterpret_cast<const _B16x8*>(v_ptr);
             // iterate over each v block
 #pragma unroll
@@ -519,25 +486,25 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_kernel(
 
                     #pragma unroll
                     for(int d = 0; d < BLOCK_SIZE / 8; d++) {
-                        bit16_t pack[8];
+                        bit16_t elems[8];
 
                         // read each data points individually and save them into array
                         #pragma unroll
                         for (int d2 = 0; d2 < 8; d2++) {
                             const int elem_offset = (d * 8 + d2) * kv_seq_stride + head_size_elem;
-                            const bit16_t* v_ptrhbe = reinterpret_cast<const bit16_t*>(v_ptrh8b) + elem_offset;
-                            pack[d2] = *v_ptrhbe;
+                            const bit16_t* elem = reinterpret_cast<const bit16_t*>(v_ptrh8b) + elem_offset;
+                            elems[d2] = *elem;
                         }
 
                         // copy all the read data points together
-                        Vlocal[h][b * BLOCK_SIZE / 8 + d] = *reinterpret_cast<const _B16x8*>(pack);
+                        Vlocal[h][b * BLOCK_SIZE / 8 + d] = *reinterpret_cast<const _B16x8*>(elems);
                     }
                 }
             }
-            #endif
         }
         else
         {
+            /// TODO: handle HND/NHD layout
             const _B8x8* v_ptrh8 = reinterpret_cast<const _B8x8*>(v_ptr);
             // iterate over each v block
 #pragma unroll
