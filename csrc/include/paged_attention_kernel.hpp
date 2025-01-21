@@ -572,14 +572,14 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
         const int klocal_token_idx  = TOKENS_PER_WARP * warpid + token_depth * 16 + lane16id;
         const int kglobal_token_idx = partition_start_token_idx + klocal_token_idx;
         const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE;
-        const cache_t* k_ptr3            = k_ptr2 + kphysical_block_offset * KX;
+        const cache_t* k_ptr3            = k_ptr2 + kphysical_block_offset * kv_seq_stride;
 
         for(int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++)
         {
             const int head_elem           = row_head_elem + qkhe_depth * QKHE_PER_FETCH;
             const int offset1             = head_elem / KX;
             const int offset2             = head_elem % KX;
-            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * BLOCK_SIZE * KX + offset2;
+            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * KX + offset2;
             const _B16x8* k_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(k_fetch_ptr);
             if constexpr(NT_KV_LOAD)
             {
