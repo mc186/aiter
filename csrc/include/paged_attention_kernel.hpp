@@ -629,14 +629,14 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
 
     _B16x8 Vlocal[VTLOOP][VHELOOP][VTLANELOOP]; // this can be interpreted as B8x16 too
 
-    const cache_t* v_ptr =
-        v_cache + wg_start_kv_head_idx * kv_head_stride + ((rowid * VTOKENS_PER_LANE) % BLOCK_SIZE);
+    const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride +
+                           ((rowid * VTOKENS_PER_LANE) % BLOCK_SIZE) * kv_seq_stride;
 
     // v fetches are 16head elems across lanes x 16 tokens per lane
     for(int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++)
     {
         const int vhead_elem  = vhe_depth * NWARPS * 16 + warpid * 16 + lane16id;
-        const cache_t* v_ptr2 = v_ptr + vhead_elem * BLOCK_SIZE;
+        const cache_t* v_ptr2 = v_ptr + vhead_elem;
 
         for(int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++)
         {
@@ -647,17 +647,18 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
                     static_cast<int64_t>(vphysical_block_number[vtoken_depth][vblock_depth]);
                 const cache_t* v_ptr3 = v_ptr2 + (vblock_number * kv_block_stride);
 
-                const cache_t* v_fetch_ptr = v_ptr3 + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD;
-                const _B16x8* v_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(v_fetch_ptr);
-                if constexpr(NT_KV_LOAD)
+                const cache_t* v_fetch_ptr =
+                    v_ptr3 + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD * kv_seq_stride;
+
+                cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
+                for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
                 {
-                    Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
-                        load_ntmprl_16Byte(v_fetch_ptr_16B);
+                    const cache_t* elem = v_fetch_ptr + d2 * kv_seq_stride;
+                    elems[d2]           = *elem;
                 }
-                else
-                {
-                    Vlocal[vtoken_depth][vhe_depth][vfetch_depth] = *v_fetch_ptr_16B;
-                }
+
+                Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
+                    *reinterpret_cast<const _B16x8*>(elems);
             }
         }
     }
