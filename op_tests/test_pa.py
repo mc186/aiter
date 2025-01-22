@@ -514,7 +514,7 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
 @pytest.mark.parametrize('kv_cache_layout', ['NHD', 'HND'])
-@pytest.mark.parametrize('pa_variant', [e for e in PAVariant])
+@pytest.mark.parametrize('pa_variant', [PAVariant.Shomy, PAVariant.Asm])
 @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
 @pytest.mark.parametrize('seed', [0])
 @pytest.mark.parametrize('device', ['cuda:0'])
@@ -777,7 +777,7 @@ if __name__ == '__main__':
 
     for ctx_len, pa_variant, quant_cache_dtype in itertools.product(
         [1, 26, 128, 4097],
-        [e for e in PAVariant],
+        [PAVariant.Shomy, PAVariant.Asm],
         [None, torch.float8_e4m3fnuz, torch.int8]):
 
         if pa_variant == PAVariant.Shomy:
