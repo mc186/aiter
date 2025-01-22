@@ -106,7 +106,8 @@ class TunedGemm:
                               device='cuda')
             ops.LLMM1(weights, inp, out, 4)
         if bias is not None:
-            return out + bias
+            return (out + bias).to(otype)
+        return out.to(otype)
 
     def apply_hipb_mm(self, inp, weights, solidx, bias=None, otype=None, scale_a=None, scale_b=None, scale_c=None):
         if otype is None:
