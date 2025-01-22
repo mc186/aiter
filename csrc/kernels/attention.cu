@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, The vLLM team.
+ * Copyright (C) 2024-2025, The vLLM team.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,22 +131,22 @@ void paged_attention_custom_launcher(const native::paged_attention_args& args, h
     // mfma4 kernel is faster than mfma16 for gqa_ratio <= 4
     switch(gqa_ratio)
     {
-    case 1: LAUNCH_CUSTOM_ATTENTION_MFMA4(1); break;
-    case 2: LAUNCH_CUSTOM_ATTENTION_MFMA4(2); break;
-    case 3: LAUNCH_CUSTOM_ATTENTION_MFMA4(3); break;
-    case 4: LAUNCH_CUSTOM_ATTENTION_MFMA4(4); break;
-    case 5: LAUNCH_CUSTOM_ATTENTION_MFMA16(5); break;
-    case 6: LAUNCH_CUSTOM_ATTENTION_MFMA16(6); break;
-    case 7: LAUNCH_CUSTOM_ATTENTION_MFMA16(7); break;
+    // case 1: LAUNCH_CUSTOM_ATTENTION_MFMA4(1); break;
+    // case 2: LAUNCH_CUSTOM_ATTENTION_MFMA4(2); break;
+    // case 3: LAUNCH_CUSTOM_ATTENTION_MFMA4(3); break;
+    // case 4: LAUNCH_CUSTOM_ATTENTION_MFMA4(4); break;
+    // case 5: LAUNCH_CUSTOM_ATTENTION_MFMA16(5); break;
+    // case 6: LAUNCH_CUSTOM_ATTENTION_MFMA16(6); break;
+    // case 7: LAUNCH_CUSTOM_ATTENTION_MFMA16(7); break;
     case 8: LAUNCH_CUSTOM_ATTENTION_MFMA16(8); break;
-    case 9: LAUNCH_CUSTOM_ATTENTION_MFMA16(9); break;
-    case 10: LAUNCH_CUSTOM_ATTENTION_MFMA16(10); break;
-    case 11: LAUNCH_CUSTOM_ATTENTION_MFMA16(11); break;
-    case 12: LAUNCH_CUSTOM_ATTENTION_MFMA16(12); break;
-    case 13: LAUNCH_CUSTOM_ATTENTION_MFMA16(13); break;
-    case 14: LAUNCH_CUSTOM_ATTENTION_MFMA16(14); break;
-    case 15: LAUNCH_CUSTOM_ATTENTION_MFMA16(15); break;
-    case 16: LAUNCH_CUSTOM_ATTENTION_MFMA16(16); break;
+    // case 9: LAUNCH_CUSTOM_ATTENTION_MFMA16(9); break;
+    // case 10: LAUNCH_CUSTOM_ATTENTION_MFMA16(10); break;
+    // case 11: LAUNCH_CUSTOM_ATTENTION_MFMA16(11); break;
+    // case 12: LAUNCH_CUSTOM_ATTENTION_MFMA16(12); break;
+    // case 13: LAUNCH_CUSTOM_ATTENTION_MFMA16(13); break;
+    // case 14: LAUNCH_CUSTOM_ATTENTION_MFMA16(14); break;
+    // case 15: LAUNCH_CUSTOM_ATTENTION_MFMA16(15); break;
+    // case 16: LAUNCH_CUSTOM_ATTENTION_MFMA16(16); break;
     default: TORCH_CHECK(false, "Unsupported gqa ratio: ", gqa_ratio); break;
     }
 
@@ -241,36 +241,36 @@ void paged_attention(const paged_attention_traits& traits,
 {
     if(traits.kv_cache_dtype == "auto")
     {
-        if(traits.q_type == ScalarType::Half)
-        {
-            CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, _Float16, vllm::Fp8KVCacheDataType::kAuto);
-        }
-        else if(traits.q_type == ScalarType::BFloat16)
-        {
+        // if(traits.q_type == ScalarType::Half)
+        // {
+        //     CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, _Float16, vllm::Fp8KVCacheDataType::kAuto);
+        // }
+        // else if(traits.q_type == ScalarType::BFloat16)
+        // {
             CALL_CUSTOM_LAUNCHER_BLK_HEAD(
                 __hip_bfloat16, __hip_bfloat16, vllm::Fp8KVCacheDataType::kAuto);
-        }
-        else
-        {
-            TORCH_CHECK(false, "Unsupported data type: ", traits.q_type);
-        }
+        // }
+        // else
+        // {
+        //     TORCH_CHECK(false, "Unsupported data type: ", traits.q_type);
+        // }
     }
-    else if(traits.kv_cache_dtype == "fp8" || traits.kv_cache_dtype == "fp8_e4m3")
-    {
-        if(traits.q_type == ScalarType::Half)
-        {
-            CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, uint8_t, vllm::Fp8KVCacheDataType::kFp8E4M3);
-        }
-        else if(traits.q_type == ScalarType::BFloat16)
-        {
-            CALL_CUSTOM_LAUNCHER_BLK_HEAD(
-                __hip_bfloat16, uint8_t, vllm::Fp8KVCacheDataType::kFp8E4M3);
-        }
-        else
-        {
-            TORCH_CHECK(false, "Unsupported data type: ", traits.q_type);
-        }
-    }
+    // else if(traits.kv_cache_dtype == "fp8" || traits.kv_cache_dtype == "fp8_e4m3")
+    // {
+    //     if(traits.q_type == ScalarType::Half)
+    //     {
+    //         CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, uint8_t, vllm::Fp8KVCacheDataType::kFp8E4M3);
+    //     }
+    //     else if(traits.q_type == ScalarType::BFloat16)
+    //     {
+    //         CALL_CUSTOM_LAUNCHER_BLK_HEAD(
+    //             __hip_bfloat16, uint8_t, vllm::Fp8KVCacheDataType::kFp8E4M3);
+    //     }
+    //     else
+    //     {
+    //         TORCH_CHECK(false, "Unsupported data type: ", traits.q_type);
+    //     }
+    // }
     else
     {
         TORCH_CHECK(false, "Unsupported KV cache dtype: ", traits.kv_cache_dtype);

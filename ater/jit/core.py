@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Advanced Micro Devices, Inc.  All rights reserved.
+# Copyright (C) 2024-2025 Advanced Micro Devices, Inc.  All rights reserved.
 #
 # -*- coding:utf-8 -*-
 # @Script: core.py
@@ -23,28 +23,26 @@ import logging
 import json
 
 PREBUILD_KERNELS = False
-if os.path.exists(os.path.dirname(os.path.abspath(__file__))+"/ater_.so"):
-    ater_ = importlib.import_module(f'{__package__}.ater_')
+if os.path.exists(os.path.dirname(os.path.abspath(__file__)) + "/ater_.so"):
+    ater_ = importlib.import_module(f"{__package__}.ater_")
     PREBUILD_KERNELS = True
 logger = logging.getLogger("ater")
 
 PY = sys.executable
 this_dir = os.path.dirname(os.path.abspath(__file__))
 ATER_ROOT_DIR = os.path.abspath(f"{this_dir}/../../")
-ATER_CSRC_DIR = f'{ATER_ROOT_DIR}/csrc'
-CK_DIR = os.environ.get(
-    "CK_DIR", f"{ATER_ROOT_DIR}/3rdparty/composable_kernel")
+ATER_CSRC_DIR = f"{ATER_ROOT_DIR}/csrc"
+CK_DIR = os.environ.get("CK_DIR", f"{ATER_ROOT_DIR}/3rdparty/composable_kernel")
 bd_dir = f"{this_dir}/build"
 # copy ck to build, thus hippify under bd_dir
-shutil.copytree(CK_DIR, f'{bd_dir}/ck', dirs_exist_ok=True)
-CK_DIR = f'{bd_dir}/ck'
+shutil.copytree(CK_DIR, f"{bd_dir}/ck", dirs_exist_ok=True)
+CK_DIR = f"{bd_dir}/ck"
 
 
 def validate_and_update_archs():
     archs = os.getenv("GPU_ARCHS", "native").split(";")
     # List of allowed architectures
-    allowed_archs = ["native", "gfx90a",
-                     "gfx940", "gfx941", "gfx942", "gfx1100"]
+    allowed_archs = ["native", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx1100"]
 
     # Validate if each element in archs is in allowed_archs
     assert all(
@@ -54,12 +52,14 @@ def validate_and_update_archs():
 
 
 def check_and_set_ninja_worker():
-    max_num_jobs_cores = int(max(1, os.cpu_count()*0.8))
-    if int(os.environ.get("MAX_JOBS", '1')) < max_num_jobs_cores:
+    max_num_jobs_cores = int(max(1, os.cpu_count() * 0.8))
+    if int(os.environ.get("MAX_JOBS", "1")) < max_num_jobs_cores:
         import psutil
+
         # calculate the maximum allowed NUM_JOBS based on free memory
-        free_memory_gb = psutil.virtual_memory().available / \
-            (1024 ** 3)  # free memory in GB
+        free_memory_gb = psutil.virtual_memory().available / (
+            1024**3
+        )  # free memory in GB
         # each JOB peak memory cost is ~8-9GB when threads = 4
         max_num_jobs_memory = int(free_memory_gb / 9)
 
@@ -74,39 +74,47 @@ def rename_cpp_to_cu(els, dst, recurisve=False):
         newName = name
         if name.endswith(".cpp") or name.endswith(".cu"):
             newName = name.replace(".cpp", ".cu")
-            ret.append(f'{dst}/{newName}')
-        shutil.copy(f'{src}/{name}', f'{dst}/{newName}')
+            ret.append(f"{dst}/{newName}")
+        shutil.copy(f"{src}/{name}", f"{dst}/{newName}")
+
     ret = []
     for el in els:
         if not os.path.exists(el):
             continue
         if os.path.isdir(el):
             for entry in os.listdir(el):
-                if os.path.isdir(f'{el}/{entry}'):
+                if os.path.isdir(f"{el}/{entry}"):
                     if recurisve:
-                        ret += rename_cpp_to_cu([f'{el}/{entry}'],
-                                                dst, recurisve)
+                        ret += rename_cpp_to_cu([f"{el}/{entry}"], dst, recurisve)
                     continue
                 do_rename_and_mv(entry, el, dst, ret)
         else:
-            do_rename_and_mv(os.path.basename(el),
-                             os.path.dirname(el), dst, ret)
+            do_rename_and_mv(os.path.basename(el), os.path.dirname(el), dst, ret)
     return ret
 
 
 @functools.lru_cache(maxsize=1024)
 def get_module(md_name):
-    return importlib.import_module(f'{__package__}.{md_name}')
+    return importlib.import_module(f"{__package__}.{md_name}")
 
 
-def build_module(md_name, srcs, flags_extra_cc, flags_extra_hip, blob_gen_cmd, extra_include, extra_ldflags, verbose):
+def build_module(
+    md_name,
+    srcs,
+    flags_extra_cc,
+    flags_extra_hip,
+    blob_gen_cmd,
+    extra_include,
+    extra_ldflags,
+    verbose,
+):
     startTS = time.perf_counter()
     try:
-        op_dir = f'{bd_dir}/{md_name}'
-        logger.info(f'start build [{md_name}] under {op_dir}')
+        op_dir = f"{bd_dir}/{md_name}"
+        logger.info(f"start build [{md_name}] under {op_dir}")
 
-        opbd_dir = f'{op_dir}/build'
-        src_dir = f'{op_dir}/build/srcs'
+        opbd_dir = f"{op_dir}/build"
+        src_dir = f"{op_dir}/build/srcs"
         os.makedirs(src_dir, exist_ok=True)
         sources = rename_cpp_to_cu(srcs, src_dir)
 
@@ -117,13 +125,18 @@ def build_module(md_name, srcs, flags_extra_cc, flags_extra_hip, blob_gen_cmd, e
             "-D__HIP_PLATFORM_AMD__=1",
             "-U__HIP_NO_HALF_CONVERSIONS__",
             "-U__HIP_NO_HALF_OPERATORS__",
-
-            "-mllvm", "-enable-post-misched=0",
-            "-mllvm", "-amdgpu-early-inline-all=true",
-            "-mllvm", "-amdgpu-function-calls=false",
-            "-mllvm", "--amdgpu-kernarg-preload-count=16",
-            "-mllvm", "-amdgpu-coerce-illegal-types=1",
-            # "-v", "--save-temps",
+            "-mllvm",
+            "-enable-post-misched=0",
+            "-mllvm",
+            "-amdgpu-early-inline-all=true",
+            "-mllvm",
+            "-amdgpu-function-calls=false",
+            "-mllvm",
+            "--amdgpu-kernarg-preload-count=16",
+            "-mllvm",
+            "-amdgpu-coerce-illegal-types=1",
+            "-v",
+            "--save-temps",
             "-Wno-unused-result",
             "-Wno-switch-bool",
             "-Wno-vla-cxx-extension",
@@ -139,33 +152,31 @@ def build_module(md_name, srcs, flags_extra_cc, flags_extra_hip, blob_gen_cmd, e
             if blob_gen_cmd:
                 blob_dir = f"{op_dir}/blob"
                 os.makedirs(blob_dir, exist_ok=True)
-                baton = FileBaton(os.path.join(blob_dir, 'lock'))
+                baton = FileBaton(os.path.join(blob_dir, "lock"))
                 if baton.try_acquire():
                     try:
-                        os.system(f'{PY} {blob_gen_cmd.format(blob_dir)}')
+                        os.system(f"{PY} {blob_gen_cmd.format(blob_dir)}")
                     finally:
                         baton.release()
                 else:
                     baton.wait()
-                sources += rename_cpp_to_cu([blob_dir],
-                                            src_dir, recurisve=True)
+                sources += rename_cpp_to_cu([blob_dir], src_dir, recurisve=True)
             return sources
 
         if isinstance(blob_gen_cmd, list):
             for s_blob_gen_cmd in blob_gen_cmd:
-                sources = exec_blob(s_blob_gen_cmd,op_dir, src_dir, sources)
+                sources = exec_blob(s_blob_gen_cmd, op_dir, src_dir, sources)
         else:
             sources = exec_blob(blob_gen_cmd, op_dir, src_dir, sources)
 
-        bd_include_dir = f'{op_dir}/build/include'
+        bd_include_dir = f"{op_dir}/build/include"
         os.makedirs(bd_include_dir, exist_ok=True)
-        rename_cpp_to_cu([f"{ATER_CSRC_DIR}/include"],
-                         bd_include_dir)
+        rename_cpp_to_cu([f"{ATER_CSRC_DIR}/include"], bd_include_dir)
         extra_include_paths = [
             f"{CK_DIR}/include",
             f"{CK_DIR}/library/include",
             f"{bd_include_dir}",
-        ]+extra_include
+        ] + extra_include
 
         module = cpp_extension.load(
             md_name,
@@ -179,31 +190,36 @@ def build_module(md_name, srcs, flags_extra_cc, flags_extra_hip, blob_gen_cmd, e
             with_cuda=True,
             is_python_module=True,
         )
-        shutil.copy(f'{opbd_dir}/{md_name}.so', f'{this_dir}')
+        shutil.copy(f"{opbd_dir}/{md_name}.so", f"{this_dir}")
     except Exception as e:
-        logger.error('failed build jit [{}]\n-->[History]: {}'.format(
-            md_name,
-            ''.join(traceback.format_exception(*sys.exc_info()))
-        ))
+        logger.error(
+            "failed build jit [{}]\n-->[History]: {}".format(
+                md_name, "".join(traceback.format_exception(*sys.exc_info()))
+            )
+        )
         sys.exit()
-    logger.info(
-        f'finish build [{md_name}], cost {time.perf_counter()-startTS:.8f}s')
+    logger.info(f"finish build [{md_name}], cost {time.perf_counter()-startTS:.8f}s")
     return module
 
-def get_args_of_build(ops_name:str):
-    d_opt_build_args = {"srcs": [],
+
+def get_args_of_build(ops_name: str):
+    d_opt_build_args = {
+        "srcs": [],
         "md_name": "",
         "flags_extra_cc": [],
         "flags_extra_hip": [],
         "extra_ldflags": None,
         "extra_include": [],
         "verbose": False,
-        "blob_gen_cmd": ""
-        }
-    def convert(d_ops:dict):
+        "blob_gen_cmd": "",
+    }
+
+    def convert(d_ops: dict):
         ## judge isASM
         if d_ops["isASM"].lower() == "true":
-            d_ops["flags_extra_hip"].append("rf'-DATER_ASM_DIR=\\\"{ATER_ROOT_DIR}/hsa/\\\"'")
+            d_ops["flags_extra_hip"].append(
+                "rf'-DATER_ASM_DIR=\\\"{ATER_ROOT_DIR}/hsa/\\\"'"
+            )
         del d_ops["isASM"]
         for k, val in d_ops.items():
             if isinstance(val, list):
@@ -216,16 +232,19 @@ def get_args_of_build(ops_name:str):
             else:
                 pass
         return d_ops
-    with open(this_dir+"/optCompilerConfig.json", 'r') as file:
+
+    with open(this_dir + "/optCompilerConfig.json", "r") as file:
         data = json.load(file)
         if isinstance(data, dict):
             # parse all ops
             if ops_name == "all":
-                d_all_ops = {"srcs":[],
-                    "flags_extra_cc" : [],
+                d_all_ops = {
+                    "srcs": [],
+                    "flags_extra_cc": [],
                     "flags_extra_hip": [],
                     "extra_include": [],
-                    "blob_gen_cmd": []}
+                    "blob_gen_cmd": [],
+                }
                 # traverse opts
                 for ops_name, d_ops in data.items():
                     ## Cannot contain tune ops
@@ -235,7 +254,7 @@ def get_args_of_build(ops_name:str):
                     for k in d_all_ops.keys():
                         if isinstance(single_ops[k], list):
                             d_all_ops[k] += single_ops[k]
-                        elif isinstance(single_ops[k], str) and single_ops[k]!='':
+                        elif isinstance(single_ops[k], str) and single_ops[k] != "":
                             d_all_ops[k].append(single_ops[k])
 
                 # print(d_all_ops)
@@ -252,7 +271,7 @@ def get_args_of_build(ops_name:str):
             print("ERROR: pls use dict_format to write 'optCompilerConfig.json'! ")
 
 
-def compile_ops(ops_name : str, fc_name: Optional[str] = None):
+def compile_ops(ops_name: str, fc_name: Optional[str] = None):
     def decorator(func):
         def wrapper(*args, **kwargs):
             d_args = get_args_of_build(ops_name)
@@ -276,9 +295,19 @@ def compile_ops(ops_name : str, fc_name: Optional[str] = None):
                 if module is None:
                     module = get_module(md_name)
             except Exception as e:
-                module = build_module(md_name, srcs, flags_extra_cc, flags_extra_hip,
-                                      blob_gen_cmd, extra_include, extra_ldflags, verbose)
+                module = build_module(
+                    md_name,
+                    srcs,
+                    flags_extra_cc,
+                    flags_extra_hip,
+                    blob_gen_cmd,
+                    extra_include,
+                    extra_ldflags,
+                    verbose,
+                )
 
             return getattr(module, loadName)(*args, **kwargs)
+
         return wrapper
+
     return decorator
