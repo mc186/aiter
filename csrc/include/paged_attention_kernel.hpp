@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, The vLLM team.
+ * Copyright (C) 2024-2025, The vLLM team.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -453,7 +453,6 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
     {
         return;
     }
-
     constexpr int GQA_RATIO4 = DIVIDE_ROUND_UP(GQA_RATIO, 4);
 
     __shared__ float shared_qk_max[NWARPS][16 + 1];
@@ -601,13 +600,13 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
 
     constexpr int VTOKENS_PER_LANE =
         TOKENS_PER_WARP / ROWS_PER_WARP; // 64/4 = 16 contiguous vtokens per lane
-    constexpr int VBLOCKS_PER_LANE =
-        1; // assumes block size >=16, each lane can correspond to 1 block only
+    constexpr int VBLOCKS_PER_LANE = DIVIDE_ROUND_UP(16, BLOCK_SIZE); // assumes block size >=16, each lane can correspond to 1 block only
     constexpr int VTLOOP = NWARPS; // corresponds to tokens across warps
     constexpr int VTLANELOOP =
         DIVIDE_ROUND_UP(VTOKENS_PER_LANE,
                         CONTIGUOUS_KV_ELEMS_16B_LOAD); // optimized for 16B fetches; assumes
                                                        // minimum block size is 16
+    // constexpr int VTLANELOOP = 16;
     constexpr int VHELOOP = HEAD_SIZE / 16 / NWARPS;   // head_size distributed across warps; each
                                                        // mfma instr works on 16 head elements
 
@@ -618,7 +617,7 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
     {
         for(int vblock_depth = 0; vblock_depth < VBLOCKS_PER_LANE; vblock_depth++)
         {
-            const int vlocal_token_idx = vtoken_depth * VTOKENS_PER_LANE * ROWS_PER_WARP +
+            const int vlocal_token_idx = vtoken_depth * TOKENS_PER_WARP +
                                          rowid * VTOKENS_PER_LANE + vblock_depth * BLOCK_SIZE;
             const int vglobal_token_idx = partition_start_token_idx + vlocal_token_idx;
             const int vblock_idx =
@@ -642,25 +641,28 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
         {
             for(int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++)
             {
-                const int vblock_depth = 0;
-                const int64_t vblock_number =
-                    static_cast<int64_t>(vphysical_block_number[vtoken_depth][vblock_depth]);
-                const cache_t* v_ptr3 = v_ptr2 + (vblock_number * kv_block_stride);
-
-                const cache_t* v_fetch_ptr =
-                    v_ptr3 + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD * kv_seq_stride;
-
-                // read data points individually and save them into array
                 cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
-                for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
-                {
-                    const cache_t* elem = v_fetch_ptr + d2 * kv_seq_stride;
-                    elems[d2]           = *elem;
-                }
+                for(int idx = 0; idx < CONTIGUOUS_KV_ELEMS_16B_LOAD; idx++){
+                    const int64_t vblock_number =
+                        static_cast<int64_t>(vphysical_block_number[vtoken_depth][idx+vfetch_depth*CONTIGUOUS_KV_ELEMS_16B_LOAD]);
+                    const cache_t* v_ptr3 = v_ptr2 + (vblock_number * kv_block_stride);
 
-                // copy all the read data points together
-                Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
-                    *reinterpret_cast<const _B16x8*>(elems);
+                    const cache_t* v_fetch_ptr = v_ptr3;
+                    printf("Here");
+                    // read data points individually and save them into array
+                    // cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
+                    // for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
+                    // {
+                    //     const cache_t* elem = v_fetch_ptr + d2 * kv_seq_stride;
+                    //     elems[d2]           = *elem;
+
+                    // }
+                    elems[idx]=*v_fetch_ptr;
+                    // copy all the read data points together
+                    // Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
+                    //     *reinterpret_cast<const _B16x8*>(elems);
+                }
+                Vlocal[vtoken_depth][vhe_depth][vfetch_depth]=*reinterpret_cast<const _B16x8*>(elems);
             }
         }
     }

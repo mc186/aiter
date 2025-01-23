@@ -842,7 +842,7 @@ if __name__ == "__main__":
             (8, 1),
             128,
             False,
-            16,
+            1,
             torch.bfloat16,
             "auto",
             "HND",
