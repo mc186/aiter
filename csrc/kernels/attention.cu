@@ -482,7 +482,8 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
         T_PAR_SIZE / NWARPS; // sub partition of tokens per warp for qk calculation
     constexpr int TLOOP = TOKENS_PER_WARP / 16; // each mfma16x16x16 instruction processes 16 tokens
 
-    _B16x8 Klocal[TLOOP][QKHELOOP]; // can be interpreted as B8x16 for 8 bit types
+    __shared__ _B16x8 k_lds_tile[NWARPS * 16][QKHE_PER_FETCH / CONTIGUOUS_KV_ELEMS_16B_LOAD];
+    _B16x8 Klocal; // can be interpreted as B8x16 for 8 bit types
 
     const int wg_start_head_idx    = blockIdx.z * GQA_RATIO;
     const int wg_start_kv_head_idx = blockIdx.z;
@@ -504,7 +505,8 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
     // fetch k physical block numbers
     for(int token_depth = 0; token_depth < TLOOP; token_depth++)
     {
-        const int klocal_token_idx  = TOKENS_PER_WARP * warpid + token_depth * 16 + lane16id;
+        const int klocal_token_idx =
+            TOKENS_PER_WARP * warpid + token_depth * 16 + (laneid / ROWS_PER_WARP);
         const int kglobal_token_idx = partition_start_token_idx + klocal_token_idx;
         const int kblock_idx =
             (kglobal_token_idx < context_len) ? kglobal_token_idx / BLOCK_SIZE : last_ctx_block;
@@ -562,35 +564,6 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
     constexpr int KX     = 16 / sizeof(cache_t); // vLLM defines x as 16 Bytes of kv cache elements
     const cache_t* k_ptr = k_cache + wg_start_kv_head_idx * kv_head_stride;
 
-    const int row_head_elem = rowid * CONTIGUOUS_KV_ELEMS_16B_LOAD;
-    // fetch K values
-    for(int token_depth = 0; token_depth < TLOOP; token_depth++)
-    {
-        const int64_t kblock_number = static_cast<int64_t>(kphysical_block_number[token_depth]);
-        const cache_t* k_ptr2       = k_ptr + kblock_number * kv_block_stride;
-        const int klocal_token_idx  = TOKENS_PER_WARP * warpid + token_depth * 16 + lane16id;
-        const int kglobal_token_idx = partition_start_token_idx + klocal_token_idx;
-        const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE;
-        const cache_t* k_ptr3            = k_ptr2 + kphysical_block_offset * kv_seq_stride;
-
-        for(int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++)
-        {
-            const int head_elem           = row_head_elem + qkhe_depth * QKHE_PER_FETCH;
-            const int offset1             = head_elem / KX;
-            const int offset2             = head_elem % KX;
-            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * KX + offset2;
-            const _B16x8* k_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(k_fetch_ptr);
-            if constexpr(NT_KV_LOAD)
-            {
-                Klocal[token_depth][qkhe_depth] = load_ntmprl_16Byte(k_fetch_ptr_16B);
-            }
-            else
-            {
-                Klocal[token_depth][qkhe_depth] = *k_fetch_ptr_16B;
-            }
-        }
-    }
-
     float alibi_slope;
     if constexpr(ALIBI_ENABLED)
     {
@@ -628,6 +601,96 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
 
     _B16x8 Vlocal[VTLOOP][VHELOOP][VTLANELOOP]; // this can be interpreted as B8x16 too
 
+    // calculate post qk mfma scale
+    float scale2 = scale;
+    if constexpr(KV_DTYPE != vllm::Fp8KVCacheDataType::kAuto)
+    {
+        // multiply by k_scale if fp8 kv cache
+        scale2 *= *k_scale_ptr;
+    }
+
+    floatx4 dout[TLOOP];
+    // qk mfma
+    for(int token_depth = 0; token_depth < TLOOP; token_depth++)
+    {
+        const int64_t kblock_number = static_cast<int64_t>(kphysical_block_number[token_depth]);
+        const cache_t* k_ptr2       = k_ptr + kblock_number * kv_block_stride;
+        const int klocal_token_idx =
+            TOKENS_PER_WARP * warpid + token_depth * 16 + (laneid / ROWS_PER_WARP);
+        const int kglobal_token_idx      = partition_start_token_idx + klocal_token_idx;
+        const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE;
+        const cache_t* k_ptr3            = k_ptr2 + kphysical_block_offset * kv_seq_stride;
+
+        _B16x8 Klocal_prefetch;
+
+        auto load_k = [&](int qkhe_depth) {
+            // [POYENC] load K tile, global memory to register
+            const int head_elem = ((laneid % ROWS_PER_WARP) * CONTIGUOUS_KV_ELEMS_16B_LOAD) +
+                                  qkhe_depth * QKHE_PER_FETCH;
+            const int offset1             = head_elem / KX;
+            const int offset2             = head_elem % KX;
+            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * KX + offset2;
+            const _B16x8* k_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(k_fetch_ptr);
+            if constexpr(NT_KV_LOAD)
+            {
+                Klocal_prefetch = load_ntmprl_16Byte(k_fetch_ptr_16B);
+            }
+            else
+            {
+                Klocal_prefetch = *k_fetch_ptr_16B;
+            }
+        };
+
+        auto store_k = [&] {
+            // [POYENC] store K tile, register to LDS
+            k_lds_tile[warpid * 16 + (laneid / ROWS_PER_WARP)][(laneid % ROWS_PER_WARP)] =
+                Klocal_prefetch;
+        };
+
+        auto qk_gemm = [&](int qkhe_depth) {
+            // [POYENC] load K tile, LDS to register
+            Klocal = k_lds_tile[warpid * 16 + (laneid % 16)][(laneid / 16)];
+
+            if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
+            {
+                for(int qkratio = 0; qkratio < QK_SIZE_RATIO; qkratio++)
+                {
+                    for(int i = 0; i < 2; i++)
+                    {
+                        dout[token_depth] = gcn_mfma16x16x16_instr<scalar_t, 0, 0, 0>(
+                            Klocal.xy[i], Qlocal[qkhe_depth][qkratio].xy[i], dout[token_depth]);
+                    }
+                }
+            }
+            else
+            { // kv cache dtype fp8
+                auto Ktmp       = Klocal;
+                _B8x16 Ktmp8x16 = *reinterpret_cast<_B8x16*>(&Ktmp);
+                for(int qkratio = 0; qkratio < QK_SIZE_RATIO; qkratio++)
+                {
+                    _B8x8 Ktmp8x8    = Ktmp8x16.xy[qkratio];
+                    _B16x8 Klocaltmp = convert_b8x8_custom<scalar_t>(Ktmp8x8);
+                    for(int i = 0; i < 2; i++)
+                    {
+                        dout[token_depth] = gcn_mfma16x16x16_instr<scalar_t, 0, 0, 0>(
+                            Klocaltmp.xy[i], Qlocal[qkhe_depth][qkratio].xy[i], dout[token_depth]);
+                    }
+                }
+            }
+        };
+
+        dout[token_depth] = {0};
+        for(int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++)
+        {
+            load_k(qkhe_depth);
+            store_k();
+
+            __syncthreads();
+            qk_gemm(qkhe_depth);
+        }
+        dout[token_depth] *= scale2;
+    }
+
     const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride +
                            ((rowid * VTOKENS_PER_LANE) % BLOCK_SIZE) * kv_seq_stride;
 
@@ -662,53 +725,6 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
                     *reinterpret_cast<const _B16x8*>(elems);
             }
         }
-    }
-
-    // calculate post qk mfma scale
-    float scale2 = scale;
-    if constexpr(KV_DTYPE != vllm::Fp8KVCacheDataType::kAuto)
-    {
-        // multiply by k_scale if fp8 kv cache
-        scale2 *= *k_scale_ptr;
-    }
-
-    floatx4 dout[TLOOP];
-    // qk mfma
-    for(int token_depth = 0; token_depth < TLOOP; token_depth++)
-    {
-        dout[token_depth] = {0};
-        for(int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++)
-        {
-            if constexpr(KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto)
-            {
-                for(int qkratio = 0; qkratio < QK_SIZE_RATIO; qkratio++)
-                {
-                    for(int i = 0; i < 2; i++)
-                    {
-                        dout[token_depth] = gcn_mfma16x16x16_instr<scalar_t, 0, 0, 0>(
-                            Klocal[token_depth][qkhe_depth].xy[i],
-                            Qlocal[qkhe_depth][qkratio].xy[i],
-                            dout[token_depth]);
-                    }
-                }
-            }
-            else
-            { // kv cache dtype fp8
-                auto Ktmp       = Klocal[token_depth][qkhe_depth];
-                _B8x16 Ktmp8x16 = *reinterpret_cast<_B8x16*>(&Ktmp);
-                for(int qkratio = 0; qkratio < QK_SIZE_RATIO; qkratio++)
-                {
-                    _B8x8 Ktmp8x8    = Ktmp8x16.xy[qkratio];
-                    _B16x8 Klocaltmp = convert_b8x8_custom<scalar_t>(Ktmp8x8);
-                    for(int i = 0; i < 2; i++)
-                    {
-                        dout[token_depth] = gcn_mfma16x16x16_instr<scalar_t, 0, 0, 0>(
-                            Klocaltmp.xy[i], Qlocal[qkhe_depth][qkratio].xy[i], dout[token_depth]);
-                    }
-                }
-            }
-        }
-        dout[token_depth] *= scale2;
     }
 
     const int qkout_token_idx = partition_start_token_idx + TOKENS_PER_WARP * warpid + rowid * 4;
