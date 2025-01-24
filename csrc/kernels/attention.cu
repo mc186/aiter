@@ -403,7 +403,7 @@ template <typename scalar_t,
           int NUM_THREADS,
           bool ALIBI_ENABLED,
           int GQA_RATIO>
-__global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma16_kernel(
+__global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_kernel(
     const scalar_t* __restrict__ q,      // [num_seqs, num_heads, head_size]
     const cache_t* __restrict__ k_cache, // [num_blocks, num_kv_heads,
                                          // head_size/x, block_size, x]
@@ -455,8 +455,8 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
 
     constexpr int GQA_RATIO4 = DIVIDE_ROUND_UP(GQA_RATIO, 4);
 
-    __shared__ float shared_qk_max[NWARPS][16 + 1];
-    __shared__ float shared_exp_sum[NWARPS][16 + 1];
+    // __shared__ float shared_qk_max[NWARPS][16 + 1];
+    // __shared__ float shared_exp_sum[NWARPS][16 + 1];
     // shared_logits is used for multiple purposes
     __shared__ _B16x4 shared_logits[NWARPS][4][16][4];
 
