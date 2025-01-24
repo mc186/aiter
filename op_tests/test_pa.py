@@ -669,7 +669,6 @@ def test_paged_attention(
                 k_scale,
                 v_scale,
             )
-            print(time_golden)
     if quant_cache_dtype is None:
         if pa_variant == PAVariant.Shomy:
             if kv_cache_layout == "NHD":
@@ -826,7 +825,7 @@ if __name__ == "__main__":
     torch.set_printoptions(sci_mode=False)
 
     for ctx_len, pa_variant, quant_cache_dtype in itertools.product(
-        [5000], [1], [None]
+        [5000], [PAVariant.Shomy], [None]
     ):
 
         if pa_variant == PAVariant.Shomy:
