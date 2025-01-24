@@ -648,7 +648,7 @@ __global__ __launch_bounds__(NUM_THREADS, 5) void paged_attention_ll4mi_QKV_mfma
                     const cache_t* v_ptr3 = v_ptr2 + (vblock_number * kv_block_stride);
 
                     const cache_t* v_fetch_ptr = v_ptr3;
-                    printf("Here");
+                    // printf("Here");
                     // read data points individually and save them into array
                     // cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
                     // for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
