@@ -658,7 +658,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     }
 
     _B16x8 Vlocal[VTLOOP][VHELOOP][VTLANELOOP]; // this can be interpreted as B8x16 too
-    __shared__ _B16x8 v_fetched_values[n_thread_per_block][TOKENS_PER_WARP];
+    __shared__ _B16x8 v_fetched_values[TOKENS_PER_WARP][n_thread_per_block];
 
     const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride +
                            ((threadIdx.x / n_thread_per_block) % BLOCK_SIZE) * kv_seq_stride;
@@ -670,9 +670,9 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
         {
             for(int vblock_depth = 0; vblock_depth < VBLOCKS_PER_LANE; vblock_depth++)
             {
-                const int vlds_row_idx = laneid % n_thread_per_block;
+                const int vlds_col_idx = laneid % n_thread_per_block;
                 const int vhead_elem =
-                    vhe_depth * NWARPS * 16 + vlds_row_idx * CONTIGUOUS_KV_ELEMS_16B_LOAD;
+                    vhe_depth * NWARPS * 16 + vlds_col_idx * CONTIGUOUS_KV_ELEMS_16B_LOAD;
                 const cache_t* v_ptr2 = v_ptr + vhead_elem;
 
                 const int64_t vblock_number =
@@ -681,7 +681,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
 
                 const int vlocal_token_idx =
                     vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
-                v_fetched_values[vlds_row_idx][vlocal_token_idx] =
+                v_fetched_values[vlocal_token_idx][vlds_col_idx] =
                     *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
 
                 DEBUG_STMTS(
@@ -699,7 +699,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
             // read data points from LDS
             const int vlocal_head_elem = warpid * 16 + lane16id;
 
-            const int vlds_row_idx  = vlocal_head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
+            const int vlds_col_idx  = vlocal_head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
             const int vlds_elem_idx = vlocal_head_elem % CONTIGUOUS_KV_ELEMS_16B_LOAD;
 
             for(int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++)
@@ -712,7 +712,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                 for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
                 {
                     const cache_t* fetched_elems = reinterpret_cast<const cache_t*>(
-                        &v_fetched_values[vlds_row_idx][vlocal_token_idx + d2]);
+                        &v_fetched_values[vlocal_token_idx + d2][vlds_col_idx]);
 
                     elems[d2] = fetched_elems[vlds_elem_idx];
                 }
