@@ -632,13 +632,14 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                            ((rowid * VTOKENS_PER_LANE) % BLOCK_SIZE) * kv_seq_stride;
 
     // v fetches are 16head elems across lanes x 16 tokens per lane
-    for(int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++)
-    {
-        const int vhead_elem  = vhe_depth * NWARPS * 16 + warpid * 16 + lane16id;
-        const cache_t* v_ptr2 = v_ptr + vhead_elem;
 
-        for(int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++)
+    for(int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++)
+    {
+        for(int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++)
         {
+            const int vhead_elem  = vhe_depth * NWARPS * 16 + warpid * 16 + lane16id;
+            const cache_t* v_ptr2 = v_ptr + vhead_elem;
+
             for(int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++)
             {
                 const int vblock_depth = 0;
