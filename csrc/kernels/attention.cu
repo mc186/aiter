@@ -598,11 +598,11 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
         alibi_slope              = (lane16id < GQA_RATIO) ? alibi_slopes[alibi_head_idx] : 0.f;
     }
 
-    constexpr int n_thread_per_block = HEAD_SIZE / CONTIGUOUS_KV_ELEMS_16B_LOAD; // 16
-    constexpr int n_thread_per_warp  = n_thread_per_block;                       // 16
-    constexpr int k_thread_per_warp  = WARP_SIZE / n_thread_per_warp;            // 4
-    constexpr int k_thread_per_block = NWARPS * k_thread_per_warp;               // 16
-    constexpr int k_repeat           = TOKENS_PER_WARP / k_thread_per_block;     // 4
+    constexpr int n_thread_per_warp  = (NWARPS * 16) / CONTIGUOUS_KV_ELEMS_16B_LOAD; // 8
+    constexpr int k_thread_per_warp  = WARP_SIZE / n_thread_per_warp;                // 8
+    constexpr int n_thread_per_block = n_thread_per_warp;                            // 8
+    constexpr int k_thread_per_block = NWARPS * k_thread_per_warp;                   // 32
+    constexpr int k_repeat           = TOKENS_PER_WARP / k_thread_per_block;         // 2
     static_assert(BLOCK_SIZE <= k_thread_per_block);
 
     constexpr int VTOKENS_PER_LANE =
@@ -664,41 +664,43 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                            ((threadIdx.x / n_thread_per_block) % BLOCK_SIZE) * kv_seq_stride;
 
     // v fetches are 16head elems across lanes x 16 tokens per lane
-    for(int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++)
+    for(int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++)
     {
-        for(int vblock_depth = 0; vblock_depth < VBLOCKS_PER_LANE; vblock_depth++)
+        for(int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++)
         {
-            const int vlds_row_idx = laneid % n_thread_per_block;
-            const int vhead_elem   = vlds_row_idx * CONTIGUOUS_KV_ELEMS_16B_LOAD;
-            const cache_t* v_ptr2  = v_ptr + vhead_elem;
+            for(int vblock_depth = 0; vblock_depth < VBLOCKS_PER_LANE; vblock_depth++)
+            {
+                const int vlds_row_idx = laneid % n_thread_per_block;
+                const int vhead_elem =
+                    vhe_depth * NWARPS * 16 + vlds_row_idx * CONTIGUOUS_KV_ELEMS_16B_LOAD;
+                const cache_t* v_ptr2 = v_ptr + vhead_elem;
 
-            const int64_t vblock_number =
-                static_cast<int64_t>(vphysical_block_number[vtoken_depth][vblock_depth]);
-            const cache_t* v_fetch_ptr = v_ptr2 + (vblock_number * kv_block_stride);
+                const int64_t vblock_number =
+                    static_cast<int64_t>(vphysical_block_number[vtoken_depth][vblock_depth]);
+                const cache_t* v_fetch_ptr = v_ptr2 + (vblock_number * kv_block_stride);
 
-            const int vlocal_token_idx =
-                vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
-            v_fetched_values[vlds_row_idx][vlocal_token_idx] =
-                *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
+                const int vlocal_token_idx =
+                    vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
+                v_fetched_values[vlds_row_idx][vlocal_token_idx] =
+                    *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
 
-            DEBUG_STMTS(printf("[POYENC] id: (%3d, %3d), loop: (%d, %d), vlocal_token_idx: %3d, "
-                               "vblock_number: %2ld\n",
-                               BLOCK_IDX,
-                               THREAD_IDX,
-                               vtoken_depth,
-                               vblock_depth,
-                               vlocal_token_idx,
-                               vblock_number);)
-        }
-        __syncthreads();
+                DEBUG_STMTS(
+                    printf("[POYENC] id: (%3d, %3d), loop: (%d, %d), vlocal_token_idx: %3d, "
+                           "vblock_number: %2ld\n",
+                           BLOCK_IDX,
+                           THREAD_IDX,
+                           vtoken_depth,
+                           vblock_depth,
+                           vlocal_token_idx,
+                           vblock_number);)
+            }
+            __syncthreads();
 
-        // read data points from LDS
-        for(int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++)
-        {
-            const int vhead_elem = vhe_depth * NWARPS * 16 + warpid * 16 + lane16id;
+            // read data points from LDS
+            const int vlocal_head_elem = warpid * 16 + lane16id;
 
-            const int vlds_row_idx  = vhead_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
-            const int vlds_elem_idx = vhead_elem % CONTIGUOUS_KV_ELEMS_16B_LOAD;
+            const int vlds_row_idx  = vlocal_head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
+            const int vlds_elem_idx = vlocal_head_elem % CONTIGUOUS_KV_ELEMS_16B_LOAD;
 
             for(int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++)
             {
@@ -719,8 +721,8 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                 Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
                     *reinterpret_cast<const _B16x8*>(elems);
             }
+            __syncthreads();
         }
-        __syncthreads();
     }
 
     // calculate post qk mfma scale
@@ -2133,6 +2135,7 @@ void paged_attention_custom_launcher(torch::Tensor& out,
     switch(block_size)                                                          \
     {                                                                           \
     case 16: CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 16, HEAD_SIZE); break;  \
+    case 32: CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 32, HEAD_SIZE); break;  \
     default: TORCH_CHECK(false, "Unsupported block size: ", block_size); break; \
     }
 
