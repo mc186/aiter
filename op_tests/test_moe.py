@@ -145,7 +145,7 @@ def torch_moe_test(hidden_states, w1, w2, topk_weight, topk_ids,
                      topk_ids, fc1_scale, fc2_scale, fc1_smooth_scale, fc2_smooth_scale)
 
 
-@perftest()
+@perftest(num_warmup=0, num_iters=2)
 def asm_moe_test(hidden_states, w1, w2, topk_weight, topk_ids,
                  # following for int8 quant
                  fc1_scale=None,  # [expert, inter_dim, 1]
@@ -193,7 +193,7 @@ quant_algo = [
     "fp8quant",  # g1u1 support
     "int8smoothquant",  # g1u1/g1u0 support
     "fp8smoothquant",  # g1u1 support
-    "wint4afp8quant", # g1u1 support
+    "wint4afp8smoothquant", # g1u1 support
 ]
 
 def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quantAlgoId=0, use_g1u1=False, shared_E=0):
@@ -295,29 +295,28 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quantAlgoId=0, use_g1
                                      fc1_smooth_scale, fc2_smooth_scale)
 
         # b implement
-        print(w1.shape,w2.shape)
+        print(fc1_scale.shape,fc2_scale.shape, fc1_smooth_scale, fc2_smooth_scale)
         w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1)))
         w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2)))
-        print(w1b.shape, w2b.shape)
         out_b, avg_b = asm_moe_test(input, w1b, w2b, topk_weights, topk_ids,
                                     fc1_scale, fc2_scale,
                                     fc1_smooth_scale, fc2_smooth_scale)
 
-        # def calculateTensorsSize(*args):
-        #     num_btype = 0
-        #     for el in args:
-        #         if isinstance(el, torch.Tensor):
-        #             num_btype += el.element_size() * el.numel()
-        #     return num_btype
+        def calculateTensorsSize(*args):
+            num_btype = 0
+            for el in args:
+                if isinstance(el, torch.Tensor):
+                    num_btype += el.element_size() * el.numel()
+            return num_btype
 
-        # num_tb = calculateTensorsSize(input, input, w1b, w2b, topk_weights, topk_ids,
-        #                               fc1_scale, fc2_scale,
-        #                               fc1_smooth_scale, fc2_smooth_scale) / (1024*1024*1024*1024.0)
-        # bw = num_tb * 1e6 / avg_b
-        # print(f"[BW  ] {token=}, quant={quantstr}, {model_dim=}, {inter_dim=}, {E=}, {shared_E=}, {topk=}, dtype: {dtype}, asm_bandwidth: {bw:.2f}TB/s")
+        num_tb = calculateTensorsSize(input, input, w1b, w2b, topk_weights, topk_ids,
+                                      fc1_scale, fc2_scale,
+                                      fc1_smooth_scale, fc2_smooth_scale) / (1024*1024*1024*1024.0)
+        bw = num_tb * 1e6 / avg_b
+        print(f"[BW  ] {token=}, quant={quantstr}, {model_dim=}, {inter_dim=}, {E=}, {shared_E=}, {topk=}, dtype: {dtype}, asm_bandwidth: {bw:.2f}TB/s")
 
-        # msg = f"[perf] {token=}, quant={quantstr}, {model_dim=}, {inter_dim=}, {E=}, {shared_E=}, {topk=}, dtype: {dtype}, torch_avg: {avg_c:<8.2f} us, asm_avg: {avg_b:.2f} us, uplift: {avg_c/avg_b-1:.1%}"
-        # checkAllclose(ref2, out_b, rtol=0.01, atol=100, msg=msg)
+        msg = f"[perf] {token=}, quant={quantstr}, {model_dim=}, {inter_dim=}, {E=}, {shared_E=}, {topk=}, dtype: {dtype}, torch_avg: {avg_c:<8.2f} us, asm_avg: {avg_b:.2f} us, uplift: {avg_c/avg_b-1:.1%}"
+        checkAllclose(ref2, out_b, rtol=0.01, atol=100, msg=msg)
     else:
         dtypeMax = 7 if use_int4 else None
         w1, fc1_scale = pertoken_quant(
@@ -445,7 +444,7 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quantAlgoId=0, use_g1
 print('\ng1u1 int4')
 for dtype in [torch.bfloat16]:
     for m in [32]:
-        for dim in [4096]:
-            for hdim in [2048]:
+        for dim in [1024]:
+            for hdim in [1024]:
                 test_fmoe(dtype, m, dim, hdim, 8, 2,
                           quantAlgoId=5, use_g1u1=True)

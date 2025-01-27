@@ -52,6 +52,8 @@ def asm_moe(hidden_states, w1, w2, topk_weight, topk_ids,
     M, topk = topk_ids.shape
     dtype = hidden_states.dtype
     device = topk_ids.device
+    lastdim_mul = 8 if w1.dtype == torch.uint32 else 1
+    model_dim = model_dim * lastdim_mul
     sorted_ids, sorted_weights, sorted_expert_ids, num_tokens_post_padded, moe_buf = moe_sorting_ck(topk_ids, topk_weight, E,
                                                                                                     model_dim, dtype)
     if fc1_scale is None:
@@ -68,8 +70,9 @@ def asm_moe(hidden_states, w1, w2, topk_weight, topk_ids,
                                  fc2_smooth_scale)
     else:
         if fc1_smooth_scale is not None:
+            a8_type = w1.dtype if w1.dtype != torch.uint32 else torch.float8_e4m3fnuz
             a8 = torch.empty((topk * M, model_dim),
-                             dtype=w1.dtype, device=device)
+                             dtype=a8_type, device=device)
             a8_scale = torch.empty(
                 (topk * M), dtype=torch.float, device=device)
 
@@ -94,7 +97,6 @@ def asm_moe(hidden_states, w1, w2, topk_weight, topk_ids,
                 logger.warning(f'FMOE fall into pure torch quant...')
                 a8, a8_scale = aiter.pertoken_quant(
                     hidden_states, torch.float, quant_dtype=w1.dtype)
-        lastdim_mul = 8 if w1.dtype == torch.uint32 else 1
         if w2.shape[2] * lastdim_mul == w1.shape[1]:
             fmoe_func = aiter.fmoe_int8_g1u0
         elif w2.shape[2] * 2 * lastdim_mul == w1.shape[1]:
