@@ -21,22 +21,21 @@ import triton.language as tl
 def convert_int8_to_uint32_int4(tensor: torch.Tensor) -> torch.Tensor:
     assert tensor.dtype == torch.int8, "input should be int8"
 
-    if tensor.shape[1] % 8 != 0:
+    if tensor.shape[-1] % 8 != 0:
         raise ValueError("k % 8 should be zero")
 
-    tensor_reshaped = tensor.reshape(tensor.shape[0], tensor.shape[1] // 8, 8, *tensor.shape[2:])
+    tensor_reshaped = tensor.reshape(*tensor.shape[:-1], tensor.shape[-1] // 8, 8)
     high_bits = ((tensor_reshaped & 0x0F))
     merged = (
-        (high_bits[:, :, 0].to(torch.int32) << 28) |
-        (high_bits[:, :, 1].to(torch.int32) << 24) |
-        (high_bits[:, :, 2].to(torch.int32) << 20) |
-        (high_bits[:, :, 3].to(torch.int32) << 16) |
-        (high_bits[:, :, 4].to(torch.int32) << 12) |
-        (high_bits[:, :, 5].to(torch.int32) << 8)  |
-        (high_bits[:, :, 6].to(torch.int32) << 4)  |
-        high_bits[:, :, 7].to(torch.int32)
+        (high_bits[:, :, :, 0].to(torch.int32) << 28) |
+        (high_bits[:, :, :, 1].to(torch.int32) << 24) |
+        (high_bits[:, :, :, 2].to(torch.int32) << 20) |
+        (high_bits[:, :, :, 3].to(torch.int32) << 16) |
+        (high_bits[:, :, :, 4].to(torch.int32) << 12) |
+        (high_bits[:, :, :, 5].to(torch.int32) << 8)  |
+        (high_bits[:, :, :, 6].to(torch.int32) << 4)  |
+         high_bits[:, :, :, 7].to(torch.int32)
     )
-
     return merged.view(dtype=torch.uint32)
 
 def rearrange_4bit_elements(tensor):

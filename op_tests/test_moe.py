@@ -154,7 +154,6 @@ def asm_moe_test(hidden_states, w1, w2, topk_weight, topk_ids,
                  fc2_smooth_scale=None,  # [expert, 1, inter_dim]
                  a16=False,
                  ):
-
     return asm_moe(hidden_states,
                    w1,
                    w2,
@@ -296,10 +295,12 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quantAlgoId=0, use_g1
                                      fc1_smooth_scale, fc2_smooth_scale)
 
         # b implement
+        print(w1.shape,w2.shape)
         w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1)))
         w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2)))
+        print(w1b.shape, w2b.shape)
         out_b, avg_b = asm_moe_test(input, w1b, w2b, topk_weights, topk_ids,
-                                    False, fc1_scale, fc2_scale,
+                                    fc1_scale, fc2_scale,
                                     fc1_smooth_scale, fc2_smooth_scale)
 
         # def calculateTensorsSize(*args):
@@ -445,6 +446,6 @@ print('\ng1u1 int4')
 for dtype in [torch.bfloat16]:
     for m in [32]:
         for dim in [4096]:
-            for hdim in [128]:
+            for hdim in [2048]:
                 test_fmoe(dtype, m, dim, hdim, 8, 2,
                           quantAlgoId=5, use_g1u1=True)
