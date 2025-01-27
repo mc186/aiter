@@ -147,6 +147,7 @@ def torch_moe(hidden_states, w1, w2, topk_weight, topk_ids,
               fc1_scale.view(-1, 1)).to(dtype).view(expert, -1, D)
         w2 = (w2.view(-1, w2D).to(fc2_scale) *
               fc2_scale.view(-1, 1)).to(dtype).view(expert, -1, w2D)
+        
     if fc1_smooth_scale is not None:
         expert = fc1_smooth_scale.shape[0]
         fc1_smooth_scale = fc1_smooth_scale.view(expert, -1).to(dtype)

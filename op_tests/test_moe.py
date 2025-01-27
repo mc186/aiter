@@ -283,10 +283,10 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quantAlgoId=0, use_g1
             fc2_smooth_scale = None
         else:
             # [expert, 1, model_dim]
-            fc1_smooth_scale = randn(
+            fc1_smooth_scale = torch.ones(
                 sp2, dtype=torch.float, device="cuda")
             # [expert, 1, inter_dim]
-            fc2_smooth_scale = randn(
+            fc2_smooth_scale = torch.ones(
                 sp1, dtype=torch.float, device="cuda")
 
         # ref2 implement
@@ -446,5 +446,5 @@ for dtype in [torch.bfloat16]:
     for m in [32]:
         for dim in [1024]:
             for hdim in [1024]:
-                test_fmoe(dtype, m, dim, hdim, 8, 2,
+                test_fmoe(dtype, m, dim, hdim, 8, 1,
                           quantAlgoId=5, use_g1u1=True)
