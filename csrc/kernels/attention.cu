@@ -658,7 +658,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     }
 
     _B16x8 Vlocal[VTLOOP][VHELOOP][VTLANELOOP]; // this can be interpreted as B8x16 too
-    __shared__ unsigned char v_fetched_values[TOKENS_PER_WARP * n_thread_per_block * 16];
+    __shared__ unsigned char vlds_ptr[TOKENS_PER_WARP * n_thread_per_block * 16];
 
     const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride +
                            ((threadIdx.x / n_thread_per_block) % BLOCK_SIZE) * kv_seq_stride;
@@ -681,7 +681,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
 
                 const int vlocal_token_idx =
                     vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
-                *reinterpret_cast<_B16x8*>(v_fetched_values +
+                *reinterpret_cast<_B16x8*>(vlds_ptr +
                                            (/*row=*/vlocal_token_idx * n_thread_per_block +
                                             /*col=*/vlds_col_idx) *
                                                16) = *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
@@ -714,9 +714,9 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                 for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
                 {
                     const cache_t* fetched_elems = reinterpret_cast<const cache_t*>(
-                        v_fetched_values + (/*row=*/(vlocal_token_idx + d2) * n_thread_per_block +
-                                            /*col=*/vlds_col_idx) *
-                                               16);
+                        vlds_ptr + (/*row=*/(vlocal_token_idx + d2) * n_thread_per_block +
+                                    /*col=*/vlds_col_idx) *
+                                       16);
 
                     elems[d2] = fetched_elems[vlds_elem_idx];
                 }
