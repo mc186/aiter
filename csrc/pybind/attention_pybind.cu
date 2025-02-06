@@ -14,5 +14,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
           "                int max_context_len,"
           "                Tensor? alibi_slopes,"
           "                str kv_cache_dtype,"
+          "                str kv_cache_layout,"
           "                float k_scale, float v_scale) -> ()");
 }
