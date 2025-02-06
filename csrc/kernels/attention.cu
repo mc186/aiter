@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, The vLLM team.
+ * Copyright (C) 2024-2025, The vLLM team.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -493,14 +493,13 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     // repeat mfmas across QKHELOOP dimension
     // output layout from QKmfma : QH16xT4x4 16 qheads across 16 lanes, 16 tokens
     // across 4 rows x 4 tokens per lane
-
     const int num_context_blocks = DIVIDE_ROUND_UP(context_len, BLOCK_SIZE);
     const int last_ctx_block     = num_context_blocks - 1;
 
     const int* block_table_seq = block_tables + seq_idx * max_num_blocks_per_seq;
 
     int kphysical_block_number[TLOOP];
-
+    
     // fetch k physical block numbers
     for(int token_depth = 0; token_depth < TLOOP; token_depth++)
     {
@@ -559,26 +558,23 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     // batch size cases
     constexpr bool NT_KV_LOAD = false;
 
-    constexpr int KX     = 16 / sizeof(cache_t); // vLLM defines x as 16 Bytes of kv cache elements
     const cache_t* k_ptr = k_cache + wg_start_kv_head_idx * kv_head_stride;
 
     const int row_head_elem = rowid * CONTIGUOUS_KV_ELEMS_16B_LOAD;
+    
     // fetch K values
     for(int token_depth = 0; token_depth < TLOOP; token_depth++)
     {
         const int64_t kblock_number = static_cast<int64_t>(kphysical_block_number[token_depth]);
         const cache_t* k_ptr2       = k_ptr + kblock_number * kv_block_stride;
         const int klocal_token_idx  = TOKENS_PER_WARP * warpid + token_depth * 16 + lane16id;
-        const int kglobal_token_idx = partition_start_token_idx + klocal_token_idx;
         const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE;
-        const cache_t* k_ptr3            = k_ptr2 + kphysical_block_offset * kv_seq_stride;
-
+        const cache_t* k_ptr3 = k_ptr2 + kphysical_block_offset * CONTIGUOUS_KV_ELEMS_16B_LOAD;
         for(int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++)
         {
             const int head_elem           = row_head_elem + qkhe_depth * QKHE_PER_FETCH;
-            const int offset1             = head_elem / KX;
-            const int offset2             = head_elem % KX;
-            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * KX + offset2;
+            const int offset1             = head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
+            const cache_t* k_fetch_ptr    = k_ptr3 + offset1 * CONTIGUOUS_KV_ELEMS_16B_LOAD;
             const _B16x8* k_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(k_fetch_ptr);
             if constexpr(NT_KV_LOAD)
             {
@@ -1991,9 +1987,8 @@ void paged_attention_custom_launcher(torch::Tensor& out,
     int max_num_blocks_per_seq = block_tables.size(1);
     int q_stride               = query.stride(0);
     int kv_block_stride        = key_cache.stride(0);
-    int kv_head_stride = kv_cache_layout == "HND" ? key_cache.stride(1) : key_cache.stride(2);
-    int kv_seq_stride  = kv_cache_layout == "HND" ? key_cache.stride(2) : key_cache.stride(1);
-
+    int kv_head_stride = kv_cache_layout == "HND" ? value_cache.stride(1) : value_cache.stride(2);
+    int kv_seq_stride  = kv_cache_layout == "HND" ? value_cache.stride(2) : value_cache.stride(1);
     // NOTE: alibi_slopes is optional.
     const float* alibi_slopes_ptr =
         alibi_slopes ? reinterpret_cast<const float*>(alibi_slopes.value().data_ptr()) : nullptr;
@@ -2138,6 +2133,7 @@ void paged_attention_custom_launcher(torch::Tensor& out,
 #define CALL_CUSTOM_LAUNCHER_BLK(T, KVT, KV_DTYPE, HEAD_SIZE)                   \
     switch(block_size)                                                          \
     {                                                                           \
+    case 1: CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 1, HEAD_SIZE); break;  \
     case 16: CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 16, HEAD_SIZE); break;  \
     case 32: CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 32, HEAD_SIZE); break;  \
     default: TORCH_CHECK(false, "Unsupported block size: ", block_size); break; \
