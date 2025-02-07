@@ -376,8 +376,8 @@ __device__ __forceinline__ _B16x8 convert_b8x8_custom(const _B8x8 input) {
 template <typename scalar_t, typename cache_t,
           vllm::Fp8KVCacheDataType KV_DTYPE, typename OUTT, int BLOCK_SIZE,
           int HEAD_SIZE, int NUM_THREADS,
-          int GQA_RATIO>
-__global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma16_kernel(
+          int GQA_RATIO, bool VLLM_K_LAYOUT=false>
+__global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_kernel(
     const scalar_t* __restrict__ q,       // [num_seqs, num_heads, head_size]
     const cache_t* __restrict__ k_cache,  // [num_blocks, num_kv_heads,
                                           // head_size/x, block_size, x]
@@ -542,15 +542,21 @@ __global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma1
       const int64_t kblock_number = static_cast<int64_t>(kphysical_block_number[token_depth]);
       const cache_t* k_ptr2 = k_ptr + kblock_number * kv_block_stride;
       const int klocal_token_idx = TOKENS_PER_WARP * warpid + token_depth * 16 + lane16id;
-      const int kglobal_token_idx = partition_start_token_idx + klocal_token_idx;
-      const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE; 
-      const cache_t* k_ptr3 = k_ptr2 + kphysical_block_offset * kv_seq_stride;
-
+      const int kphysical_block_offset = klocal_token_idx % BLOCK_SIZE;
+      const cache_t* k_ptr3 = nullptr;
+      if constexpr (VLLM_K_LAYOUT) {
+        k_ptr3 = k_ptr2 + kphysical_block_offset * KX;
+      } else {
+        k_ptr3 = k_ptr2 + kphysical_block_offset * kv_seq_stride;
+      }
       for (int qkhe_depth = 0; qkhe_depth < QKHELOOP; qkhe_depth++) {
         const int head_elem = row_head_elem + qkhe_depth * QKHE_PER_FETCH;
-        const int offset1 = head_elem / KX;
-        const int offset2 = head_elem % KX;
-        const cache_t* k_fetch_ptr = k_ptr3 + head_elem;
+        const cache_t* k_fetch_ptr = nullptr;
+        if constexpr (VLLM_K_LAYOUT) {
+            k_fetch_ptr = k_ptr3 + head_elem * BLOCK_SIZE;
+        } else {
+            k_fetch_ptr = k_ptr3 + head_elem;
+        }
         const _B16x8* k_fetch_ptr_16B = reinterpret_cast<const _B16x8*>(k_fetch_ptr);
         Klocal[token_depth][qkhe_depth] = *k_fetch_ptr_16B;
       }
@@ -2088,7 +2094,7 @@ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_reduce_kernel(
 template <typename scalar_t, typename cache_t,
           vllm::Fp8KVCacheDataType KV_DTYPE, typename OUTT, int BLOCK_SIZE,
           int HEAD_SIZE, int NUM_THREADS,
-          int GQA_RATIO>
+          int GQA_RATIO, bool VLLM_K_LAYOUT=false>
 __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_kernel(
     const scalar_t* __restrict__ q,       // [num_seqs, num_heads, head_size]
     const cache_t* __restrict__ k_cache,  // [num_blocks, num_kv_heads,
@@ -2203,8 +2209,8 @@ void paged_attention_custom_launcher(
   int max_num_blocks_per_seq = block_tables.size(1);
   int q_stride = query.stride(0);
   int kv_block_stride = key_cache.stride(0);
-  int kv_head_stride = kv_cache_layout == "HND" ? key_cache.stride(1) : key_cache.stride(2);
-  int kv_seq_stride  = kv_cache_layout == "HND" ? key_cache.stride(2) : key_cache.stride(1);
+  int kv_head_stride = kv_cache_layout == "HND" ? value_cache.stride(1) : value_cache.stride(2);
+  int kv_seq_stride  = kv_cache_layout == "HND" ? value_cache.stride(2) : value_cache.stride(1);
 
   // NOTE: alibi_slopes is optional.
   const float* alibi_slopes_ptr =
