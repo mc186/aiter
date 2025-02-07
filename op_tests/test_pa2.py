@@ -322,13 +322,13 @@ def run_ater(query,
              scale,
              alibi_slopes,
              k_scale,
-             v_scale,):
+             v_scale,
+             block_size):
     # copied from ops.PagedAttention.forward_decode()
     _PARTITION_SIZE_ROCM = 256
     fp8_out_scale = None
 
     num_seqs, num_heads, head_size = query.shape
-    block_size = key_cache.shape[2 if kv_cache_layout == 'HND' else 1]
     gqa_ratio = num_heads // num_kv_heads
 
     output = torch.empty_like(query)
@@ -531,7 +531,8 @@ def test_paged_attention(
     pa_variant: PAVariant,
     quant_cache_dtype: torch.dtype,
     seed: int,
-    device: str
+    device: str,
+    vllm_k_layout: bool = False
 ) -> None:
     if pa_variant == PAVariant.Shomy:
         if quant_cache_dtype is not None:
@@ -621,6 +622,9 @@ def test_paged_attention(
                 key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
                 value_cache_new = rearrange(value_cache_new, 'b h s d -> b s h d')
 
+            if vllm_k_layout:
+                key_cache_new = key_cache
+
             out_golden, _ = run_ater(
                 query,
                 key_cache_new.contiguous(),
@@ -635,6 +639,7 @@ def test_paged_attention(
                 alibi_slopes,
                 k_scale,
                 v_scale,
+                block_size
             )
 
     if quant_cache_dtype is None:
@@ -642,6 +647,9 @@ def test_paged_attention(
             if kv_cache_layout == 'NHD':
                 key_cache_new = rearrange(key_cache_new, 'b h s d -> b s h d')
                 value_cache_new = rearrange(value_cache_new, 'b h s d -> b s h d')
+
+            if vllm_k_layout:
+                key_cache_new = key_cache
 
             out_ater, time_ater = run_ater(
                 query,
@@ -657,6 +665,7 @@ def test_paged_attention(
                 alibi_slopes,
                 k_scale,
                 v_scale,
+                block_size
             )
             assert checkAllclose(out_golden, out_ater,
                                 msg=f'golden vs ater:{time_ater}')
