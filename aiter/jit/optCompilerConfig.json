@@ -165,6 +165,7 @@
     },
     "module_moe_sorting": {
         "srcs": [
+            "f'{AITER_CSRC_DIR}/py_itfs_ck/moe_sorting_global.cu'",
             "f'{AITER_CSRC_DIR}/py_itfs_ck/moe_sorting_kernels.cu'",
             "f'{AITER_CSRC_DIR}/pybind/moe_sorting_pybind.cu'",
             "f'{CK_DIR}/example/ck_tile/13_moe_sorting/'"
