@@ -588,6 +588,8 @@ __global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma1
 
     _B16x8 Vlocal[VTLOOP][VHELOOP][VTLANELOOP]; //this could be B8x16 too
     __shared__ unsigned char vlds_ptr[TOKENS_PER_WARP * n_thread_per_block * 16];
+    static_assert(VBLOCKS_PER_LANE == VTLANELOOP,
+                  "make sure we can keep un-shuffled data in Vlocal as well");
 
     const cache_t* v_ptr = v_cache + wg_start_kv_head_idx * kv_head_stride
                          + ((threadIdx.x / n_thread_per_block) % BLOCK_SIZE) * kv_seq_stride;
@@ -608,37 +610,9 @@ __global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma1
 
           const int vlocal_token_idx =
               vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
-          *reinterpret_cast<_B16x8*>(vlds_ptr +
-            (/*row=*/vlocal_token_idx * n_thread_per_block +
-             /*col=*/vlds_col_idx) * 16) = *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
+          Vlocal[vtoken_depth][vhe_depth][vblock_depth] =
+            *reinterpret_cast<const _B16x8*>(v_fetch_ptr);
         }
-        __syncthreads();
-
-        // read data points from LDS
-        const int vlocal_head_elem = warpid * 16 + lane16id;
-
-        const int vlds_col_idx  = vlocal_head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
-        const int vlds_elem_idx = vlocal_head_elem % CONTIGUOUS_KV_ELEMS_16B_LOAD;
-
-        for (int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++) {
-          const int vlocal_token_idx =
-                    rowid * VTOKENS_PER_LANE + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD;
-
-          // read data points individually and save them into array
-          cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
-          for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
-          {
-            const cache_t* fetched_elems = reinterpret_cast<const cache_t*>(
-              vlds_ptr + (/*row=*/(vlocal_token_idx + d2) * n_thread_per_block +
-                          /*col=*/vlds_col_idx) * 16);
-
-            elems[d2] = fetched_elems[vlds_elem_idx];
-          }
-          // copy all the read data points together
-          Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
-            *reinterpret_cast<const _B16x8*>(elems);
-        }
-        __syncthreads();
       }
     }
 
@@ -851,12 +825,51 @@ __global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma1
     //v layout: 16he across lanes x 16 tokens per lane
 
     for (int vhe_depth = 0; vhe_depth < VHELOOP; vhe_depth++) {
-        floatx4 tmp_out = {0};
+      floatx4 tmp_out = {0};
 
-        for (int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++) {
+      for (int vtoken_depth = 0; vtoken_depth < VTLOOP; vtoken_depth++) {
+        // 1. store data into LDS
+        for(int vblock_depth = 0; vblock_depth < VBLOCKS_PER_LANE; vblock_depth++)
+        {
+          const int vlds_col_idx = laneid % n_thread_per_block;
+          const int vlocal_token_idx =
+            vblock_depth * k_thread_per_block + threadIdx.x / n_thread_per_block;
+          *reinterpret_cast<_B16x8*>(vlds_ptr +
+                                     (/*row=*/vlocal_token_idx * n_thread_per_block +
+                                      /*col=*/vlds_col_idx) *
+                                      16) = Vlocal[vtoken_depth][vhe_depth][vblock_depth];
+        }
+        __syncthreads();
 
+        // 2. load data from LDS (transposed), then do multification
         if constexpr (KV_DTYPE == vllm::Fp8KVCacheDataType::kAuto) {
           for (int vfetch_depth = 0; vfetch_depth < VTLANELOOP; vfetch_depth++) {
+            {
+              const int vlocal_head_elem = warpid * 16 + lane16id;
+
+              const int vlds_col_idx  = vlocal_head_elem / CONTIGUOUS_KV_ELEMS_16B_LOAD;
+              const int vlds_elem_idx = vlocal_head_elem % CONTIGUOUS_KV_ELEMS_16B_LOAD;
+
+              const int vlocal_token_idx =
+                rowid * VTOKENS_PER_LANE + vfetch_depth * CONTIGUOUS_KV_ELEMS_16B_LOAD;
+
+              // read data points individually and save them into array
+              cache_t elems[CONTIGUOUS_KV_ELEMS_16B_LOAD];
+              for(int d2 = 0; d2 < CONTIGUOUS_KV_ELEMS_16B_LOAD; ++d2)
+              {
+                  const cache_t* fetched_elems = reinterpret_cast<const cache_t*>(
+                    vlds_ptr + (/*row=*/(vlocal_token_idx + d2) * n_thread_per_block +
+                                /*col=*/vlds_col_idx) *
+                                  16);
+
+                  elems[d2] = fetched_elems[vlds_elem_idx];
+              }
+
+              // copy all the read data points together
+              Vlocal[vtoken_depth][vhe_depth][vfetch_depth] =
+                  *reinterpret_cast<const _B16x8*>(elems);
+          }
+
               for (int i=0; i<2; i++) {
                 //TODO generalize this for 8 bit dtypes: each lane needs 2*vfetch_depth + 2 _B16x4 K/token dimension elems; each row is multiplied by a factor of 4
                 //layout: lane in depth dimension | row across ->
@@ -900,6 +913,7 @@ __global__ __launch_bounds__(NUM_THREADS,5) void paged_attention_ll4mi_QKV_mfma1
           }
             
         }
+          __syncthreads();
         }
         if constexpr (KV_DTYPE != vllm::Fp8KVCacheDataType::kAuto) {
             tmp_out *= v_scale;
