@@ -2385,6 +2385,9 @@ void paged_attention_custom_launcher(
 #endif
 #define CALL_CUSTOM_LAUNCHER_BLK(T, KVT, KV_DTYPE, HEAD_SIZE)     \
   switch (block_size) {                                           \
+    case 1:                                                       \
+      CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 1, HEAD_SIZE);   \
+      break;                                                      \
     case 16:                                                      \
       CALL_CUSTOM_LAUNCHER_OUT(T, KVT, KV_DTYPE, 16, HEAD_SIZE);  \
       break;                                                      \

@@ -510,7 +510,7 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('num_heads', [(8, 1), (4, 2)])
 @pytest.mark.parametrize('head_size', [128])
 @pytest.mark.parametrize('use_alibi', [False])
-@pytest.mark.parametrize('block_size', [16])
+@pytest.mark.parametrize('block_size', [1, 16])
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
 @pytest.mark.parametrize('kv_cache_layout', ['NHD', 'HND'])
