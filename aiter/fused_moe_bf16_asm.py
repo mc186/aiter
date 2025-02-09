@@ -50,6 +50,7 @@ def asm_moe(hidden_states,
             fc2_smooth_scale=None,  # [expert, 1, inter_dim]
             a16=False,
             per_tensor_quant_scale=None,
+            block_shape=None,
             ):
     E, model_dim, inter_dim = w2.shape
     M, topk = topk_ids.shape
@@ -95,16 +96,23 @@ def asm_moe(hidden_states,
                 a8, hidden_states, fc1_smooth_scale, topk_ids, a8_scale)
         else:
             if w1.dtype == torch.float8_e4m3fnuz:
-                a8 = torch.empty(
-                    (M, model_dim), dtype=w1.dtype, device=device)
-                a8_scale = torch.empty(M, dtype=torch.float, device=device)
-                if per_tensor_quant_scale is None:
-                    aiter.dynamic_per_token_scaled_fp8_quant(
-                        a8, hidden_states, a8_scale)
+                if block_shape is not None:
+                    block_n, block_k = block_shape
+                    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+                        per_token_group_quant_fp8)
+                    a8, a8_scale = per_token_group_quant_fp8(hidden_states, block_k)
+                    a8_scale = a8_scale.amin(-1)
                 else:
-                    aiter.static_scaled_fp8_quant(
-                        a8, hidden_states, per_tensor_quant_scale)
-                    a8_scale.fill_(per_tensor_quant_scale)
+                    a8 = torch.empty(
+                        (M, model_dim), dtype=w1.dtype, device=device)
+                    a8_scale = torch.empty(M, dtype=torch.float, device=device)
+                    if per_tensor_quant_scale is None:
+                        aiter.dynamic_per_token_scaled_fp8_quant(
+                            a8, hidden_states, a8_scale)
+                    else:
+                        aiter.static_scaled_fp8_quant(
+                            a8, hidden_states, per_tensor_quant_scale)
+                        a8_scale.fill_(per_tensor_quant_scale)
             elif w1.dtype == torch.int8:
                 a8 = torch.empty(
                     (M, model_dim), dtype=w1.dtype, device=device)
