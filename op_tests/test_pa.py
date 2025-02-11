@@ -130,10 +130,13 @@ def ref_masked_attention(
     value: torch.Tensor,
     scale: float,
     attn_mask: Optional[torch.Tensor] = None,
+    logits_soft_cap: float = 0.0
 ) -> torch.Tensor:
     attn_weights = scale * torch.einsum("qhd,khd->hqk", query, key).float()
     if attn_mask is not None:
         attn_weights = attn_weights + attn_mask.float()
+    if 0 < logits_soft_cap:
+        attn_weights = logits_soft_cap * torch.tanh(attn_weights / logits_soft_cap)
     attn_weights = torch.softmax(attn_weights, dim=-1).to(value.dtype)
     out = torch.einsum("hqk,khd->qhd", attn_weights, value)
     return out
@@ -200,6 +203,7 @@ def run_torch(query,
               num_kv_heads,
               scale,
               alibi_slopes,
+              logits_soft_cap,
               k_scale,
               v_scale,
               num_queries_per_kv):
@@ -244,7 +248,7 @@ def run_torch(query,
             alibi_bias = alibi_slopes.view(-1, 1, 1) * alibi_bias.view(
                 1, 1, -1)
 
-        out = ref_masked_attention(q, keys, values, scale, alibi_bias)
+        out = ref_masked_attention(q, keys, values, scale, alibi_bias, logits_soft_cap)
         out = out.view(num_query_heads, head_size)
         output[i].copy_(out, non_blocking=True)
     return output, 1
@@ -260,6 +264,7 @@ def run_torch_new(query,
               num_kv_heads,
               scale,
               alibi_slopes,
+              logits_soft_cap,
               k_scale,
               v_scale,
               num_queries_per_kv):
@@ -304,7 +309,7 @@ def run_torch_new(query,
             alibi_bias = alibi_slopes.view(-1, 1, 1) * alibi_bias.view(
                 1, 1, -1)
 
-        out = ref_masked_attention(q, keys, values, scale, alibi_bias)
+        out = ref_masked_attention(q, keys, values, scale, alibi_bias, logits_soft_cap)
         out = out.view(num_query_heads, head_size)
         output[i].copy_(out, non_blocking=True)
     return output, 1
@@ -321,6 +326,7 @@ def run_ater(query,
              num_kv_heads,
              scale,
              alibi_slopes,
+             logits_soft_cap,
              k_scale,
              v_scale,):
     # copied from ops.PagedAttention.forward_decode()
@@ -369,6 +375,7 @@ def run_ater(query,
         alibi_slopes,
         kv_cache_dtype,
         kv_cache_layout,
+        logits_soft_cap,
         k_scale,
         v_scale,
         fp8_out_scale if cpa_fp8_out else None,
@@ -514,6 +521,7 @@ DUMP_OUTPUT = False # whether to dump output
 @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
 @pytest.mark.parametrize('kv_cache_layout', ['NHD', 'HND'])
+@pytest.mark.parametrize('logits_soft_cap', [0., 30.])
 @pytest.mark.parametrize('pa_variant', [PAVariant.Shomy])
 @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
 @pytest.mark.parametrize('seed', [0])
@@ -528,6 +536,7 @@ def test_paged_attention(
     dtype: torch.dtype,
     kv_cache_dtype: str,
     kv_cache_layout: str,
+    logits_soft_cap: float,
     pa_variant: PAVariant,
     quant_cache_dtype: torch.dtype,
     seed: int,
@@ -609,6 +618,7 @@ def test_paged_attention(
                 num_kv_heads,
                 scale,
                 alibi_slopes,
+                logits_soft_cap,
                 k_scale,
                 v_scale,
                 num_queries_per_kv,
@@ -633,6 +643,7 @@ def test_paged_attention(
                 num_kv_heads,
                 scale,
                 alibi_slopes,
+                0.0,
                 k_scale,
                 v_scale,
             )
@@ -655,6 +666,7 @@ def test_paged_attention(
                 num_kv_heads,
                 scale,
                 alibi_slopes,
+                logits_soft_cap,
                 k_scale,
                 v_scale,
             )
@@ -788,5 +800,5 @@ if __name__ == '__main__':
                 continue
 
         test_paged_attention(ctx_len, 128, (8, 1), 128, False, 16,
-                             torch.bfloat16, "auto", 'HND', pa_variant, 
-                             quant_cache_dtype, 0, "cuda:0")
+                             torch.bfloat16, "auto", 'HND', 0.0, 
+                             pa_variant, quant_cache_dtype, 0, "cuda:0")

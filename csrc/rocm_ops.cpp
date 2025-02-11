@@ -45,6 +45,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
             "                Tensor? alibi_slopes,"
             "                str kv_cache_dtype,"
             "                str kv_cache_layout,"
+            "                float logits_soft_cap,"
             "                Tensor k_scale, Tensor v_scale) -> ()");
 
       m.def("gemm_a8w8", &gemm_a8w8, "gemm_a8w8", py::arg("XQ"), py::arg("WQ"),

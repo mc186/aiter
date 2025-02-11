@@ -402,6 +402,7 @@ template <typename scalar_t,
           int HEAD_SIZE,
           int NUM_THREADS,
           bool ALIBI_ENABLED,
+          bool LOGITS_SOFT_CAP_ENABLED,
           int GQA_RATIO>
 __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_kernel(
     const scalar_t* __restrict__ q,      // [num_seqs, num_heads, head_size]
@@ -426,6 +427,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                                     // head_size]
     OUTT* __restrict__ final_out,   // [num_seqs, num_heads, head_size]
     int max_ctx_blocks,
+    float logits_soft_cap,
     const float* k_scale_ptr,
     const float* v_scale_ptr,
     const float* __restrict__ fp8_out_scale_ptr)
@@ -746,6 +748,22 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
             for(int i = 0; i < 4; i++)
             {
                 dout[token_depth][i] += alibi_slope * (alibi_offset + i);
+            }
+        }
+    }
+    // apply soft-capping to logits
+    if constexpr(LOGITS_SOFT_CAP_ENABLED)
+    {
+        const float logits_soft_cap_reciprocal = __frcp_rn(logits_soft_cap);
+        const auto apply_soft_cap              = [&](float value) {
+            return logits_soft_cap * tanhf(value * logits_soft_cap_reciprocal);
+        };
+
+        for(int token_depth = 0; token_depth < TLOOP; token_depth++)
+        {
+            for(int i = 0; i < 4; i++)
+            {
+                dout[token_depth][i] = apply_soft_cap(dout[token_depth][i]);
             }
         }
     }
@@ -1789,6 +1807,7 @@ template <typename scalar_t,
           int HEAD_SIZE,
           int NUM_THREADS,
           bool ALIBI_ENABLED,
+          bool LOGITS_SOFT_CAP_ENABLED,
           int GQA_RATIO>
 __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_kernel(
     const scalar_t* __restrict__ q,      // [num_seqs, num_heads, head_size]
@@ -1813,6 +1832,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
                                     // head_size]
     OUTT* __restrict__ final_out,   // [num_seqs, num_heads, head_size]
     int max_ctx_blocks,
+    float logits_soft_cap,
     const float* k_scale_ptr,
     const float* v_scale_ptr,
     const float* __restrict__ fp8_out_scale_ptr)
@@ -1883,36 +1903,38 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_reduce_kern
 
 #endif // defined(__HIP__MI300_MI250__) TODO: Add NAVI support
 
-#define LAUNCH_CUSTOM_ATTENTION_MFMA16(GQA_RATIO)            \
-    paged_attention_ll4mi_QKV_mfma16_kernel<T,               \
-                                            KVT,             \
-                                            KV_DTYPE,        \
-                                            OUTT,            \
-                                            BLOCK_SIZE,      \
-                                            HEAD_SIZE,       \
-                                            NTHR,            \
-                                            ALIBI_ENABLED,   \
-                                            GQA_RATIO>       \
-        <<<grid, block, 0, stream>>>(query_ptr,              \
-                                     key_cache_ptr,          \
-                                     value_cache_ptr,        \
-                                     num_kv_heads,           \
-                                     scale,                  \
-                                     block_tables_ptr,       \
-                                     context_lens_ptr,       \
-                                     max_num_blocks_per_seq, \
-                                     alibi_slopes_ptr,       \
-                                     q_stride,               \
-                                     kv_block_stride,        \
-                                     kv_head_stride,         \
-                                     kv_seq_stride,          \
-                                     exp_sums_ptr,           \
-                                     max_logits_ptr,         \
-                                     tmp_out_ptr,            \
-                                     out_ptr,                \
-                                     max_ctx_blocks,         \
-                                     k_scale_ptr,            \
-                                     v_scale_ptr,            \
+#define LAUNCH_CUSTOM_ATTENTION_MFMA16(GQA_RATIO)                    \
+    paged_attention_ll4mi_QKV_mfma16_kernel<T,                       \
+                                            KVT,                     \
+                                            KV_DTYPE,                \
+                                            OUTT,                    \
+                                            BLOCK_SIZE,              \
+                                            HEAD_SIZE,               \
+                                            NTHR,                    \
+                                            ALIBI_ENABLED,           \
+                                            LOGITS_SOFT_CAP_ENABLED, \
+                                            GQA_RATIO>               \
+        <<<grid, block, 0, stream>>>(query_ptr,                      \
+                                     key_cache_ptr,                  \
+                                     value_cache_ptr,                \
+                                     num_kv_heads,                   \
+                                     scale,                          \
+                                     block_tables_ptr,               \
+                                     context_lens_ptr,               \
+                                     max_num_blocks_per_seq,         \
+                                     alibi_slopes_ptr,               \
+                                     q_stride,                       \
+                                     kv_block_stride,                \
+                                     kv_head_stride,                 \
+                                     kv_seq_stride,                  \
+                                     exp_sums_ptr,                   \
+                                     max_logits_ptr,                 \
+                                     tmp_out_ptr,                    \
+                                     out_ptr,                        \
+                                     max_ctx_blocks,                 \
+                                     logits_soft_cap,                \
+                                     k_scale_ptr,                    \
+                                     v_scale_ptr,                    \
                                      fp8_out_scale_ptr);
 
 #define LAUNCH_CUSTOM_ATTENTION_MFMA4(GQA_RATIO)             \
@@ -1964,7 +1986,8 @@ template <typename T,
           int HEAD_SIZE,
           typename OUTT,
           int PARTITION_SIZE_OLD,
-          bool ALIBI_ENABLED>
+          bool ALIBI_ENABLED,
+          bool LOGITS_SOFT_CAP_ENABLED>
 void paged_attention_custom_launcher(torch::Tensor& out,
                                      torch::Tensor& exp_sums,
                                      torch::Tensor& max_logits,
@@ -1979,6 +2002,7 @@ void paged_attention_custom_launcher(torch::Tensor& out,
                                      int max_context_len,
                                      const std::optional<torch::Tensor>& alibi_slopes,
                                      const std::string& kv_cache_layout,
+                                     float logits_soft_cap,
                                      torch::Tensor& k_scale,
                                      torch::Tensor& v_scale,
                                      const c10::optional<torch::Tensor>& fp8_out_scale)
@@ -2069,7 +2093,8 @@ void paged_attention_custom_launcher(torch::Tensor& out,
     }
 }
 
-#define CALL_CUSTOM_LAUNCHER(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, ALIBI_ENABLED) \
+#define CALL_CUSTOM_LAUNCHER(                                                                   \
+    T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, ALIBI_ENABLED, LOGITS_SOFT_CAP_ENABLED) \
     paged_attention_custom_launcher<T,                                                          \
                                     KVT,                                                        \
                                     KV_DTYPE,                                                   \
@@ -2077,32 +2102,51 @@ void paged_attention_custom_launcher(torch::Tensor& out,
                                     HEAD_SIZE,                                                  \
                                     OUTT,                                                       \
                                     PSIZE,                                                      \
-                                    ALIBI_ENABLED>(out,                                         \
-                                                   exp_sums,                                    \
-                                                   max_logits,                                  \
-                                                   tmp_out,                                     \
-                                                   query,                                       \
-                                                   key_cache,                                   \
-                                                   value_cache,                                 \
-                                                   num_kv_heads,                                \
-                                                   scale,                                       \
-                                                   block_tables,                                \
-                                                   context_lens,                                \
-                                                   max_context_len,                             \
-                                                   alibi_slopes,                                \
-                                                   kv_cache_layout,                             \
-                                                   k_scale,                                     \
-                                                   v_scale,                                     \
-                                                   fp8_out_scale);
+                                    ALIBI_ENABLED,                                              \
+                                    LOGITS_SOFT_CAP_ENABLED>(out,                               \
+                                                             exp_sums,                          \
+                                                             max_logits,                        \
+                                                             tmp_out,                           \
+                                                             query,                             \
+                                                             key_cache,                         \
+                                                             value_cache,                       \
+                                                             num_kv_heads,                      \
+                                                             scale,                             \
+                                                             block_tables,                      \
+                                                             context_lens,                      \
+                                                             max_context_len,                   \
+                                                             alibi_slopes,                      \
+                                                             kv_cache_layout,                   \
+                                                             logits_soft_cap,                   \
+                                                             k_scale,                           \
+                                                             v_scale,                           \
+                                                             fp8_out_scale);
 
-#define CALL_CUSTOM_LAUNCHER_ALIBI(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE)   \
-    if(alibi_slopes)                                                                     \
-    {                                                                                    \
-        CALL_CUSTOM_LAUNCHER(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, true);  \
-    }                                                                                    \
-    else                                                                                 \
-    {                                                                                    \
-        CALL_CUSTOM_LAUNCHER(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, false); \
+#define CALL_CUSTOM_LAUNCHER_SOFT_CAP(                                                 \
+    T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, ALIBI_ENABLED)                 \
+    if(0.f < logits_soft_cap)                                                          \
+    {                                                                                  \
+        CALL_CUSTOM_LAUNCHER(                                                          \
+            T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, ALIBI_ENABLED, true);  \
+    }                                                                                  \
+    else if(logits_soft_cap == 0.f)                                                    \
+    {                                                                                  \
+        CALL_CUSTOM_LAUNCHER(                                                          \
+            T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, ALIBI_ENABLED, false); \
+    }                                                                                  \
+    else                                                                               \
+    {                                                                                  \
+        TORCH_CHECK(false, "logits_soft_cap must be non-negative");                    \
+    }
+
+#define CALL_CUSTOM_LAUNCHER_ALIBI(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE)            \
+    if(alibi_slopes)                                                                              \
+    {                                                                                             \
+        CALL_CUSTOM_LAUNCHER_SOFT_CAP(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, true);  \
+    }                                                                                             \
+    else                                                                                          \
+    {                                                                                             \
+        CALL_CUSTOM_LAUNCHER_SOFT_CAP(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, PSIZE, false); \
     }
 
 #define CALL_CUSTOM_LAUNCHER_PSIZE(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT)                    \
@@ -2168,6 +2212,7 @@ void paged_attention(
     const std::optional<torch::Tensor>& alibi_slopes,
     const std::string& kv_cache_dtype,
     const std::string& kv_cache_layout,
+    float logits_soft_cap,
     torch::Tensor& k_scale,
     torch::Tensor& v_scale,
     const c10::optional<torch::Tensor>& fp8_out_scale,
