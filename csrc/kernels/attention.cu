@@ -413,7 +413,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     const int num_kv_heads,
     const float scale,
     const int* __restrict__ block_tables, // [num_seqs, max_num_blocks_per_seq]
-    const int* __restrict__ context_lens, // [num_seqs]
+    const int* __restrict__ context_lens, // [num_seqs + 1]
     const int max_num_blocks_per_seq,
     const float* __restrict__ alibi_slopes, // [num_heads]
     const int q_stride,
@@ -446,7 +446,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
 
     const int max_num_partitions = gridDim.y;
 
-    const int context_len = context_lens[seq_idx];
+    const int context_len = context_lens[seq_idx + 1] - context_lens[seq_idx];
 
     const int partition_start_token_idx = partition_idx * T_PAR_SIZE; // partition_size;
     // exit if partition is out of context for seq
@@ -1595,14 +1595,14 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_reduce_kern
                                           // max_num_partitions]
     const scalar_t* __restrict__ tmp_out, // [num_seqs, num_heads,
                                           // max_num_partitions, head_size]
-    const int* __restrict__ context_lens, // [num_seqs]
+    const int* __restrict__ context_lens, // [num_seqs + 1]
     const int max_num_partitions,
     const float* __restrict__ fp8_out_scale_ptr)
 {
     const int num_heads      = gridDim.x;
     const int head_idx       = blockIdx.x;
     const int seq_idx        = blockIdx.y;
-    const int context_len    = context_lens[seq_idx];
+    const int context_len    = context_lens[seq_idx + 1] - context_lens[seq_idx];
     const int num_partitions = DIVIDE_ROUND_UP(context_len, PARTITION_SIZE);
     constexpr int NUM_WARPS  = NUM_THREADS / WARP_SIZE;
     const int warpid         = threadIdx.x / WARP_SIZE;
@@ -1818,7 +1818,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_QKV_mfma16_
     const int num_kv_heads,
     const float scale,
     const int* __restrict__ block_tables, // [num_seqs, max_num_blocks_per_seq]
-    const int* __restrict__ context_lens, // [num_seqs]
+    const int* __restrict__ context_lens, // [num_seqs + 1]
     const int max_num_blocks_per_seq,
     const float* __restrict__ alibi_slopes, // [num_heads]
     const int q_stride,
@@ -1894,7 +1894,7 @@ __global__ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_reduce_kern
                                           // max_num_partitions]
     const scalar_t* __restrict__ tmp_out, // [num_seqs, num_heads,
                                           // max_num_partitions, head_size]
-    const int* __restrict__ context_lens, // [num_seqs]
+    const int* __restrict__ context_lens, // [num_seqs + 1]
     const int max_num_partitions,
     const float* __restrict__ fp8_out_scale_ptr)
 {
@@ -2206,7 +2206,7 @@ void paged_attention(
     int64_t num_kv_heads,
     double scale,
     torch::Tensor& block_tables, // [num_seqs, max_num_blocks_per_seq]
-    torch::Tensor& context_lens, // [num_seqs]
+    torch::Tensor& context_lens, // [num_seqs + 1]
     int64_t block_size,
     int64_t max_context_len,
     const std::optional<torch::Tensor>& alibi_slopes,

@@ -600,8 +600,8 @@ def test_paged_attention(
         )
 
         # seq_lens = [random.randint(1, MAX_SEQ_LEN) for _ in range(num_seqs)]
-        seq_lens = [ctx_lens for _ in range(num_seqs)]
-        seq_lens = torch.tensor(seq_lens, dtype=torch.int)
+        seq_lens = torch.full(size=(num_seqs,), fill_value=ctx_lens, dtype=torch.int)
+        seq_lens_new = torch.tensor([0] + [ctx_lens] * num_seqs).cumsum(dim=0, dtype=torch.int)
 
         # generate golden output
         if pa_variant == PAVariant.Shomy:
@@ -636,7 +636,7 @@ def test_paged_attention(
                 key_cache_new.contiguous(),
                 value_cache_new.contiguous(),
                 block_tables,
-                seq_lens,
+                seq_lens_new,
                 max_seq_len,
                 kv_cache_dtype,
                 kv_cache_layout,
@@ -659,7 +659,7 @@ def test_paged_attention(
                 key_cache_new.contiguous(),
                 value_cache_new.contiguous(),
                 block_tables,
-                seq_lens,
+                seq_lens_new,
                 max_seq_len,
                 kv_cache_dtype,
                 kv_cache_layout,
