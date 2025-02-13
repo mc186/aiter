@@ -3,7 +3,6 @@
 
 import torch
 import torch.nn.functional as F
-import triton.language as tl
 import numpy as np
 import sys
 import os
@@ -201,7 +200,14 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
 
     BLOCK_SIZE_M = 32
     quant_dtype = torch.float8_e4m3fnuz
-    w1_qt, w1_scale = aiter.per_tensor_quant(w1,  quant_dtype=quant_dtype)
+    w1_scale = torch.empty((E), dtype=torch.float, device="cuda")
+    w1_qt = torch.empty((E, inter_dim, model_dim), dtype=quant_dtype, device="cuda")
+    for i in range(E):
+        wq, ws = aiter.per_tensor_quant(w1[i],  quant_dtype=quant_dtype)
+        w1_qt[i] = wq
+        w1_scale[i] = ws
+
+    # w1_qt, w1_scale = aiter.per_tensor_quant(w1,  quant_dtype=quant_dtype)
     w2_qt, w2_scale = aiter.per_tensor_quant(w2,  quant_dtype=quant_dtype)
     a1_qt, a1_scale = aiter.per_tensor_quant(input,  quant_dtype=quant_dtype)
 
@@ -218,9 +224,18 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
                             sorted_expert_ids,
                             w1_scale, a1_scale,
                             dtype, BLOCK_SIZE_M)
-    checkAllclose(out_ref, out,
-                  msg=f'golden: {us_ref:.2f} us vs aiter:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
+    
+    out2, us = ck_moe_stage1(a1_qt,
+                            shuffle_weight(w1_qt, layout=(32, 32)),
+                            w2,
+                            sorted_ids,
+                            sorted_expert_ids,
+                            w1_scale, a1_scale,
+                            dtype, BLOCK_SIZE_M)
 
+    checkAllclose(out_ref, out, atol=10,
+                  msg=f'golden: {us_ref:.2f} us vs aiter:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
+    checkAllclose(out, out2, atol=10, msg="ck noquant vs quant check")
 
 for dtype in [torch.float16]:
     for m in [32]:
@@ -228,4 +243,4 @@ for dtype in [torch.float16]:
             for inter_dim in [6144]:
                 expert, topk = 8, 2
                 test_fmoe(dtype, m, dim, inter_dim, expert, topk,
-                          quant='fp8smoothquant', use_g1u1=False)
+                          quant='fp8quant', use_g1u1=False)
