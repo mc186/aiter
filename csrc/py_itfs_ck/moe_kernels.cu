@@ -355,14 +355,14 @@ void ck_moe_stage1(torch::Tensor &hidden_states,                         // [m, 
     int K = w1.size(2);
     int max_num_tokens_padded = sorted_token_ids.size(0);
     int agvtokens_per_expert = max_num_tokens_padded / E;
-    int M = 32
+    int M = 32;
     // int M = agvtokens_per_expert < 32 ? 32 : (agvtokens_per_expert < 64 ? 64 : 128);
 
     // BF16
     if(hidden_states.dtype() == at::ScalarType::BFloat16){
         using A0DataType = B16;
         using B0DataType = B16;
-        using DsDataType = ck::Tuple<>;
+        using DsDataType = ck::Tuple<F32, F32>;
         using EDataType = B16;
         using CDEElementOp = TypeCast;
         CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, M);
