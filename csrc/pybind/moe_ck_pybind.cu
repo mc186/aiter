@@ -20,4 +20,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
           py::arg("out"),
           py::arg("w1_scale") = std::nullopt,
           py::arg("a1_scale") = std::nullopt);
+      
+    m.def("ck_moe_stage2", &ck_moe_stage2,
+          py::arg("hidden_states"),
+          py::arg("w1"),
+          py::arg("w2"),
+          py::arg("sorted_token_ids"),
+          py::arg("sorted_expert_ids"),
+          py::arg("out"),
+          py::arg("w2_scale") = std::nullopt,
+          py::arg("a1_scale") = std::nullopt);
 }

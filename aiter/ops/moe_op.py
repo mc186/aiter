@@ -145,3 +145,15 @@ def ck_moe_stage1(
     w1_scale: Optional[Tensor] = None,
     a1_scale: Optional[Tensor] = None,
 ): ...
+
+@compile_ops("module_moe")
+def ck_moe_stage2(
+    hidden_states: Tensor,
+    w1: Tensor,
+    w2: Tensor,
+    sorted_token_ids: Tensor,
+    sorted_expert_ids: Tensor,
+    out: Tensor,
+    w2_scale: Optional[Tensor] = None,
+    a1_scale: Optional[Tensor] = None,
+): ...
