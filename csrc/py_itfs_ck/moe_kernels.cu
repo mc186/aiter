@@ -326,11 +326,11 @@ void ck_moe_stage1_gemm(torch::Tensor &hidden_states,                         //
 
 #define CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, M)                                                                                   \
     if (M == 32)                                                                                                                                                                  \
-        ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 32>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale); \
-    else if (M == 64)                                                                                                                                                             \
-        ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 64>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale); \
-    else if (M == 128)                                                                                                                                                            \
-        ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 128>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale);
+        ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 32>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale); 
+    // else if (M == 64)                                                                                                                                                             \
+    //     ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 64>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale); \
+    // else if (M == 128)                                                                                                                                                            \
+    //     ck_moe_stage1_gemm<A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, 128>(hidden_states, w1, w2, sorted_token_ids, sorted_expert_ids, out, w1_scale, a1_scale);
 
 void ck_moe_stage1(torch::Tensor &hidden_states,                         // [m, k], input token
                    torch::Tensor &w1,                                    // [e, n, k]/[e, 2*n, k], pre-shuffle([e, nr, kr, w])
@@ -355,17 +355,18 @@ void ck_moe_stage1(torch::Tensor &hidden_states,                         // [m, 
     int K = w1.size(2);
     int max_num_tokens_padded = sorted_token_ids.size(0);
     int agvtokens_per_expert = max_num_tokens_padded / E;
-    int M = agvtokens_per_expert < 32 ? 32 : (agvtokens_per_expert < 64 ? 64 : 128);
+    int M = 32
+    // int M = agvtokens_per_expert < 32 ? 32 : (agvtokens_per_expert < 64 ? 64 : 128);
 
-    // // BF16
-    // if(hidden_states.dtype() == at::ScalarType::BFloat16){
-    //     using A0DataType = B16;
-    //     using B0DataType = B16;
-    //     using DsDataType = ck::Tuple<>;
-    //     using EDataType = B16;
-    //     using CDEElementOp = TypeCast;
-    //     CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, M);
-    // }
+    // BF16
+    if(hidden_states.dtype() == at::ScalarType::BFloat16){
+        using A0DataType = B16;
+        using B0DataType = B16;
+        using DsDataType = ck::Tuple<>;
+        using EDataType = B16;
+        using CDEElementOp = TypeCast;
+        CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, DsDataType, EDataType, CDEElementOp, M);
+    }
     // FP16
     if (hidden_states.dtype() == at::ScalarType::Half)
     {

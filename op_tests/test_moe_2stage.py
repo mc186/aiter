@@ -188,6 +188,9 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     else:
         w1 = torch.randn((E+shared_E, inter_dim, model_dim),
                          dtype=dtype, device="cuda")
+    # for i in range(1, E):
+    #     w1[i] = w1[0]
+
     w2 = torch.randn((E+shared_E, model_dim, inter_dim),
                      dtype=dtype, device="cuda")
     score = torch.randn((token, E), device="cuda", dtype=dtype)
@@ -233,12 +236,28 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
                             w1_scale, a1_scale,
                             dtype, BLOCK_SIZE_M)
 
-    checkAllclose(out_ref, out, atol=10,
+    sorted_ids = sorted_ids & 0x00ffffff
+    mask = (sorted_ids) < token
+    checkAllclose(out_ref[mask], out[mask],
                   msg=f'golden: {us_ref:.2f} us vs aiter:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
-    checkAllclose(out, out2, atol=10, msg="ck noquant vs quant check")
+    checkAllclose(out[mask], out2[mask], atol=10, msg="ck noquant vs quant check")
+
+    for i in range(out.shape[0]):
+        if mask[i] == False:
+            continue
+        expert_id = sorted_expert_ids[i // BLOCK_SIZE_M].item()
+        token_id = sorted_ids[i].item()
+
+        checkAllclose(out[i], out_ref[i],
+                      msg=f"{i=} {token_id=} {expert_id=}: ")
+        # checkAllclose(out[i], out2[i], atol=10,
+        #               msg=f"ck noquant vs quant {i=} {token_id=} {expert_id=}: ")
+
+
+
 
 for dtype in [torch.float16]:
-    for m in [32]:
+    for m in [64]:
         for dim in [8192]:
             for inter_dim in [6144]:
                 expert, topk = 8, 2
