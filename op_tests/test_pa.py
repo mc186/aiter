@@ -360,28 +360,28 @@ def run_ater(query,
                                 dtype=torch.float8_e4m3fnuz)
         cpa_fp8_out = True
     ater.paged_attention_rocm(
-        output,
-        exp_sums,
-        max_logits,
-        tmp_output,
-        query,
-        key_cache,
-        value_cache,
-        num_kv_heads,
-        scale,
-        kv_indptr,
-        kv_page_indices,
-        kv_last_page_lens,
-        block_size,
-        max_seq_len,
-        alibi_slopes,
-        kv_cache_dtype,
-        kv_cache_layout,
-        logits_soft_cap,
-        k_scale,
-        v_scale,
-        fp8_out_scale if cpa_fp8_out else None,
-        _PARTITION_SIZE_ROCM,
+        output, # (bs, head_num_q, head_dim_q)
+        exp_sums, # (bs, head_num_q, max_num_partitions)
+        max_logits, # (bs, head_num_q, max_num_partitions)
+        tmp_output, # (bs, head_num_q, max_num_partitions, head_dim_q)
+        query, # (bs, head_num_q, head_dim_q)
+        key_cache, # (max_num_tokens, 1, head_num_k, head_dim_k)
+        value_cache, # (max_num_tokens, 1, head_num_k, head_dim_k)
+        num_kv_heads, # 
+        scale, # 1/sqrt(head_dim)
+        kv_indptr, # (bs+1, )
+        kv_page_indices, # (total number of tokens, )
+        kv_last_page_lens, # (bs, ) page_size==1 all ones
+        block_size, # 1
+        max_seq_len, # max context length
+        alibi_slopes, # None
+        kv_cache_dtype, # "auto"
+        kv_cache_layout, # "NHD"
+        logits_soft_cap, # 30
+        k_scale, # [1.0]
+        v_scale, # [1.0]
+        fp8_out_scale if cpa_fp8_out else None, # None
+        _PARTITION_SIZE_ROCM, # 256
     )
     if cpa_fp8_out:
         return output.view(num_seqs, num_heads * head_size)

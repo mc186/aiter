@@ -361,9 +361,14 @@ def run_ater(query,
         cpa_fp8_out = True
         
     print("==========================")
+    print(kv_indptr.shape)
+    print(kv_page_indices.shape)
     print(kv_last_page_lens.shape)
-    print(kv_last_page_lens.shape)
-    print(kv_last_page_lens.shape)
+    print(output.shape)
+    print(query.shape)
+    print(key_cache.shape)
+    print(value_cache.shape)
+    
     ater.paged_attention_rocm(
         output,
         exp_sums,
@@ -519,20 +524,6 @@ INPUT_SOURCE = InputSource.Random
 DUMP_INPUTS = False # whether to dump inputs
 DUMP_OUTPUT = False # whether to dump output
 
-# @pytest.mark.parametrize('ctx_lens', [1, 26, 128, 4097])
-# @pytest.mark.parametrize('num_seqs', [128])
-# @pytest.mark.parametrize('num_heads', [(8, 1), (4, 2)])
-# @pytest.mark.parametrize('head_size', [64, 128])
-# @pytest.mark.parametrize('use_alibi', [False, True])
-# @pytest.mark.parametrize('block_size', [1, 16, 32])
-# @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16])
-# @pytest.mark.parametrize('kv_cache_dtype', ['auto'])
-# @pytest.mark.parametrize('kv_cache_layout', ['NHD', 'HND'])
-# @pytest.mark.parametrize('logits_soft_cap', [0., 30.])
-# @pytest.mark.parametrize('pa_variant', [PAVariant.Shomy])
-# @pytest.mark.parametrize('quant_cache_dtype', [None, torch.float8_e4m3fnuz, torch.int8])
-# @pytest.mark.parametrize('seed', [0])
-# @pytest.mark.parametrize('device', ['cuda:0'])
 def test_paged_attention(
     ctx_lens: int,
     num_seqs: int,
@@ -819,6 +810,6 @@ if __name__ == '__main__':
     torch.set_printoptions(sci_mode=False)
 
 
-    test_paged_attention(4097, 128, (32, 8), 128, False, 1,
+    test_paged_attention(4097, 1, (32, 8), 128, False, 1,
                             torch.float16, "auto", 'NHD', 0.0, 
                             PAVariant.Shomy, None, 0, "cuda:0")
