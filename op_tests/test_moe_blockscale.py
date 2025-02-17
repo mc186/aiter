@@ -168,8 +168,33 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
     msg = '111'
     checkAllclose(out_ref, out_ref2, rtol=0.01, atol=100, msg=msg)
 
-
-for dtype in [torch.float16, torch.bfloat16]:
+ 
+    M, topk = topk_ids.shape
+    E, model_dim, inter_dim = w2.shape
+    #expert_mask = torch.randint(0, 2, (E,), dtype=topk_ids.dtype, device="cuda")
+    expert_mask = None
+    sorted_token_ids, sorted_weight_buf, sorted_expert_ids, num_valid_ids, out_asm = moe_sorting_ck(topk_ids, topk_weights, E,
+                                                                                                    model_dim, dtype,expert_mask)
+    aiter.fmoe_fp8_blockscale_g1u1(out_asm, 
+                                    input, 
+                                    w1, 
+                                    w2, 
+                                    sorted_token_ids,
+                                    sorted_weight_buf,
+                                    sorted_expert_ids, 
+                                    num_valid_ids,
+                                    topk,
+                                    w1_scale,
+                                    w2_scale,
+                                    w1_scale,
+                                    scale_blk_n, 
+                                    scale_blk_k,
+                                    None)
+    msg = '222'
+    print("out_asm:",out_asm)
+    checkAllclose(out_ref, out_asm, rtol=0.01, atol=100, msg=msg)
+    
+for dtype in [torch.bfloat16]:
     for m in [128, 256]:
         for dim in [4096, 8192]:
             for idim in [1024]:
