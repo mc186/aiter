@@ -110,14 +110,14 @@ public:
         int stride_D = inter_dim * I_elemSize;
         int stride_expert_GU = stride_GU * inter_dim;
         int stride_expert_D = stride_D * dim;
-        int stride_expert_GUDQN = inter_dim * sizeof(float);
-        int stride_expert_DDQN = dim * sizeof(float);
+        int stride_expert_GUDQN = w1_dqn.has_value() ? w1_dqn.value().size(1) * sizeof(float) : 0;
+        int stride_expert_DDQN = w2_dqn.has_value() ? w2_dqn.value().size(1) * sizeof(float) : 0;
         int stride_expert_SMTDQN = inter_dim * sizeof(float);
         int stride_O = dim * O_elemSize;
         if (inter_dim * 2 == w1.size(1))
         {
             stride_expert_GU *= 2;
-            stride_expert_GUDQN *= 2;
+            // stride_expert_GUDQN *= 2;
         }
 
         KernelArgs args;
@@ -159,6 +159,14 @@ public:
         args.eSMQs = stride_expert_SMTDQN;
         args.topk = topk;
 
+        void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &args, HIP_LAUNCH_PARAM_BUFFER_SIZE,
+                          &arg_size, HIP_LAUNCH_PARAM_END};
+
+        int bdx = 256;
+        int gdx = ((inter_dim + sub_GU - 1) / sub_GU);
+        int gdy = sub_X_cnt;
+        int gdz = 1;
+
         // std::cout << "args.dim: " << args.dim << std::endl;
         // std::cout << "args.inter_dim: " << args.inter_dim << std::endl;
         // std::cout << "args.token_cnt: " << args.token_cnt << std::endl;
@@ -173,14 +181,9 @@ public:
         // std::cout << "args.stride_expert_DDQN: " << args.eDQs << std::endl;
         // std::cout << "args.stride_expert_SMTDQN: " << args.eSMQs << std::endl;
         // std::cout << "args.topk: " << args.topk << std::endl;
+        // std::cout << "gdx: " << gdx << std::endl;
+        // std::cout << "gdy: " << gdy << std::endl;
 
-        void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &args, HIP_LAUNCH_PARAM_BUFFER_SIZE,
-                          &arg_size, HIP_LAUNCH_PARAM_END};
-
-        int bdx = 256;
-        int gdx = ((inter_dim + sub_GU - 1) / sub_GU);
-        int gdy = sub_X_cnt;
-        int gdz = 1;
         const at::cuda::OptionalCUDAGuard device_guard(device_of(input));
         const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
         if constexpr (switchGxy)
@@ -584,7 +587,7 @@ void fmoe_fp8_blockscale_g1u1(torch::Tensor &out,               // [token_cnt, d
     int sub_X_cnt = sorted_expert_ids.size(0);
     // int selectedTile = get_heuristic_tile(inter_dim, sub_X_cnt); // todo,add tune interface here
 
-    if (out.dtype() == at::ScalarType::BFloat16 && inter_dim % 256 == 0 && fc_scale_blkn == 128 && fc_scale_blkk == 128)
+    if (inter_dim % 256 == 0 && fc_scale_blkn == 128 && fc_scale_blkk == 128)
     {
         static FMoeKernel impl_256("fmoe_fp8_blockscale_g1u1_subGU_256", "fmoe_fp8_blockscale_g1u1_subGU_256.co", 320);
         impl_ptr = &impl_256;
@@ -592,18 +595,18 @@ void fmoe_fp8_blockscale_g1u1(torch::Tensor &out,               // [token_cnt, d
     else
         TORCH_CHECK(false, __func__, " Only support out dtype = bf16, inter_dim % 256 = 0 and fc_scale_blkn and fc_scale_blkk is 128");
 
-    impl_ptr->launch_kernel<uint8_t, uint16_t, true>(out,
-                                                     input,
-                                                     gate,
-                                                     down,
-                                                     sorted_token_ids,
-                                                     sorted_weight_buf,
-                                                     sorted_expert_ids,
-                                                     num_valid_ids,
-                                                     topk,
-                                                     // quant args
-                                                     input_scale,
-                                                     fc1_scale,
-                                                     fc2_scale,
-                                                     fc2_smooth_scale);
+    impl_ptr->launch_kernel<uint8_t, uint16_t, false>(out,
+                                                      input,
+                                                      gate,
+                                                      down,
+                                                      sorted_token_ids,
+                                                      sorted_weight_buf,
+                                                      sorted_expert_ids,
+                                                      num_valid_ids,
+                                                      topk,
+                                                      // quant args
+                                                      input_scale,
+                                                      fc1_scale,
+                                                      fc2_scale,
+                                                      fc2_smooth_scale);
 }
