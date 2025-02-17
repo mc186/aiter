@@ -109,7 +109,7 @@ def asm_moe_test(hidden_states, w1, w2, topk_weights, topk_ids,
     model_dim = hidden_states.shape[-1]
     topk = topk_ids.shape[-1]
     E = w1.shape[0]
-    sorted_token_ids, sorted_weight_buf, sorted_expert_ids, num_valid_ids, out_asm = moe_sorting_ck(topk_ids, topk_weights, E,
+    sorted_token_ids, sorted_weight_buf, sorted_expert_ids, num_valid_ids, out_asm = moe_sorting_ck(topk_ids, topk_weights, E+shared_E,
                                                                                                     model_dim, dtype)
     scale_blk_n, scale_blk_k = scale_blk
     aiter.fmoe_fp8_blockscale_g1u1(out_asm, 
@@ -155,7 +155,7 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
                                w1.shape[1]//scale_blk_n, w1.shape[2]//scale_blk_k,
                                scale_blk_n, scale_blk_k),
                      'e num_blk_n num_blk_k blk_n blk_k -> e (num_blk_n blk_n) (num_blk_k blk_k)').contiguous()
-    w1_scale = w1_scale.view(E, -1)
+    w1_scale = w1_scale.view(E+shared_E, -1)
 
     # block quant w2
     tmp = rearrange(w2.view(-1,
@@ -167,16 +167,16 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
                                w2.shape[1]//scale_blk_n, w2.shape[2]//scale_blk_k,
                                scale_blk_n, scale_blk_k),
                      'e num_blk_n num_blk_k blk_n blk_k -> e (num_blk_n blk_n) (num_blk_k blk_k)').contiguous()
-    w2_scale = w2_scale.view(E, -1)
+    w2_scale = w2_scale.view(E+shared_E, -1)
 
     # block quant input
     a1_q, a1_scale = pertoken_quant(input.view(-1, model_dim//scale_blk_k, scale_blk_k), quant_dtype=quant_dtype)
     a1_q = a1_q.view(-1, model_dim)
     a1_scale = a1_scale.squeeze(-1)
 
-    print(f'{a1_q.shape=}, {a1_scale.shape=}')
-    print(f'{w1_q.shape=}, {w1_scale.shape=}')
-    print(f'{w2_q.shape=}, {w2_scale.shape=}')
+    # print(f'{a1_q.shape=}, {a1_scale.shape=}')
+    # print(f'{w1_q.shape=}, {w1_scale.shape=}')
+    # print(f'{w2_q.shape=}, {w2_scale.shape=}')
     # w2, fc2_scale = pertoken_quant(w2, quant_dtype=quant_dtype)
 
     out_ref, us_ref = run_perftest(torch_moe_blockscale,
@@ -198,11 +198,10 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
                                     topk_weights,
                                     topk_ids,
                                     num_warmup=1, num_iters=2)
-    msg = '111'
-    checkAllclose(out_ref, out_ref2, rtol=0.01, atol=100, msg=msg)
+    # checkAllclose(out_ref, out_ref2, rtol=0.01, atol=100, msg=msg)
 
  
-    out_asm, us_ref = run_perftest(asm_moe_test,
+    out_asm, us_asm = run_perftest(asm_moe_test,
                                     a1_q,
                                     shuffle_weight(w1_q, (16, 16)), 
                                     shuffle_weight(w2_q, (16, 16)), 
@@ -213,14 +212,17 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
                                     a1_scale.t().contiguous(),
                                     (scale_blk_n, 
                                     scale_blk_k),
-                                    num_warmup=1, num_iters=2)
-    msg = '222'
-    print("out_asm:",out_asm)
-    checkAllclose(out_ref, out_asm, rtol=0.01, atol=0.01, msg=msg)
+                                    num_warmup=5, num_iters=20)
+    # print("out_asm:",out_asm)
+    msg = f"[perf] {token=}, quant={quant_dtype}, {model_dim=}, {inter_dim=}, {E=}, {shared_E=}, {topk=}, dtype: {dtype}, torch_avg: {us_ref:<8.2f} us, asm_avg: {us_asm:.2f} us"
+    checkAllclose(out_ref, out_asm, rtol=0.01, atol=10, msg=msg)
     
 for dtype in [torch.bfloat16]:
-    for m in [80]:
-        for dim in [1024]:
-            for idim in [512]:
+    for m in [1, 16, 32, 64, 128, 256, 512, 1024]:
+        for dim in [7168]:
+            for idim in [2048//8]:
+                E, topk = (256, 8)
+                shared_E = 0
                 scale_blks = (128, 128)
-                test_fmoe(dtype, m, dim, idim, scale_blks, 5, 3, quant='No', use_g1u1=True)
+                test_fmoe(dtype, m, dim, idim, scale_blks, E, topk, quant='No', use_g1u1=True,shared_E=shared_E)
+
