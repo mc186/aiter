@@ -587,7 +587,7 @@ void fmoe_fp8_blockscale_g1u1(torch::Tensor &out,               // [token_cnt, d
     int sub_X_cnt = sorted_expert_ids.size(0);
     // int selectedTile = get_heuristic_tile(inter_dim, sub_X_cnt); // todo,add tune interface here
 
-    if (inter_dim % 256 == 0 && fc_scale_blkn == 128 && fc_scale_blkk == 128)
+    if (out.dtype() == at::ScalarType::BFloat16 && inter_dim % 256 == 0 && fc_scale_blkn == 128 && fc_scale_blkk == 128)
     {
         static FMoeKernel impl_256("fmoe_fp8_blockscale_g1u1_subGU_256", "fmoe_fp8_blockscale_g1u1_subGU_256.co", 320);
         impl_ptr = &impl_256;

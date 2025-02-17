@@ -29,7 +29,7 @@ def torch_moe_blockscale(hidden_states,
                          expert_mask=None):
     computeType = torch.float
     token_num, topk = topk_ids.shape
-    num_experts, model_dim, inter_dim = w2.shape
+    expert, model_dim, inter_dim = w2.shape
     B, D = hidden_states.shape
     topk = topk_weight.shape[1]
     if expert_mask is not None:
@@ -37,11 +37,17 @@ def torch_moe_blockscale(hidden_states,
         local_expert_hash[expert_mask == 0] = -1
         topk_ids = local_expert_hash[topk_ids]
 
+    blk_n, blk_k = scale_blks
+    if a_scale is not None:
+        # print(f'{a_scale.unsqueeze(-1).shape=}, {hidden_states.view(token_num, -1, blk_k).shape=}')
+        hidden_states = hidden_states.view(token_num, -1, blk_k).to(computeType) * a_scale.unsqueeze(-1).to(computeType)
+        hidden_states = hidden_states.view(token_num, -1)
+
     hidden_states = hidden_states.view(
         token_num, 1, model_dim).repeat(1, topk, 1)
     out = torch.zeros(
         (B, topk, D),
-        dtype=dtype,
+        dtype=computeType,
         device=hidden_states.device,
     )
     if w2.shape[2]*2 == w1.shape[1]:
@@ -49,14 +55,15 @@ def torch_moe_blockscale(hidden_states,
     else:
         moeType = "g1u0"
 
+    nblk_n = inter_dim // blk_n
+    nblk_k = model_dim // blk_k
     if fc1_scale is not None:
         # gose to quant D_w8a8/w8a8
-        blk_n, blk_k = scale_blks
-        expert, nblk_n, nblk_k = fc1_scale.shape
-        fc1_scale = rearrange(fc1_scale.view(-1, 1).repeat(1, blk_n*blk_k).view(expert, nblk_n, nblk_k, blk_n, blk_k),
+        # blk_n, blk_k = scale_blks
+        # expert, nblk_n, nblk_k = fc1_scale.shape
+        fc1_scale = rearrange(fc1_scale.view(-1, 1).repeat(1, blk_n*blk_k).view(expert, -1, nblk_k, blk_n, blk_k),
                               'e num_blk_n num_blk_k blk_n blk_k -> e (num_blk_n blk_n) (num_blk_k blk_k)')
-        expert, nblk_n, nblk_k = fc1_scale.shape
-        fc2_scale = rearrange(fc2_scale.view(-1, 1).repeat(1, blk_n*blk_k).view(expert, nblk_n, nblk_k, blk_n, blk_k),
+        fc2_scale = rearrange(fc2_scale.view(-1, 1).repeat(1, blk_n*blk_k).view(expert, nblk_k, nblk_n, blk_k, blk_n),
                               'e num_blk_n num_blk_k blk_n blk_k -> e (num_blk_n blk_n) (num_blk_k blk_k)')
         w1 = w1.to(computeType) * fc1_scale.to(computeType)
         w2 = w2.to(computeType) * fc2_scale.to(computeType)
@@ -173,12 +180,16 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
     # w2, fc2_scale = pertoken_quant(w2, quant_dtype=quant_dtype)
 
     out_ref, us_ref = run_perftest(torch_moe_blockscale,
-                                   input,
-                                   w1,
-                                   w2,
+                                   a1_q,
+                                   w1_q,
+                                   w2_q,
                                    topk_weights,
                                    topk_ids,
                                    dtype,
+                                   scale_blks=scale_blks,
+                                   fc1_scale=w1_scale,
+                                   fc2_scale=w2_scale,
+                                   a_scale=a1_scale,
                                    num_warmup=1, num_iters=2)
     out_ref2, us_ref = run_perftest(torch_moe,
                                     input,
@@ -203,17 +214,6 @@ def test_fmoe(dtype, token, model_dim, inter_dim, scale_blks, E, topk, quant='No
                                     (scale_blk_n, 
                                     scale_blk_k),
                                     num_warmup=1, num_iters=2)
-    # aiter.fmoe_fp8_blockscale_g1u1(out_asm, 
-    #                                 a1_q, 
-    #                                 shuffle_weight(w1_q, (16, 16)), 
-    #                                 shuffle_weight(w2_q, (16, 16)), 
-    #                                 topk,
-    #                                 w1_scale,
-    #                                 w2_scale,
-    #                                 a1_scale.t().contiguous(),
-    #                                 scale_blk_n, 
-    #                                 scale_blk_k,
-    #                                 None)
     msg = '222'
     print("out_asm:",out_asm)
     checkAllclose(out_ref, out_asm, rtol=0.01, atol=0.01, msg=msg)
