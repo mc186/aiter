@@ -13,6 +13,7 @@
 #include "norm.h"
 #include "pos_encoding.h"
 #include "rmsnorm.h"
+#include "rope.h"
 #include "smoothquant.h"
 #include "aiter_operator.h"
 #include "asm_gemm_a8w8.h"
@@ -187,8 +188,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
             py::arg("sorted_expert_ids"), py::arg("num_valid_ids"),
             py::arg("topk"),
             py::arg("fc1_scale"), py::arg("fc2_scale"),
-            py::arg("fc1_smooth_scale"), py::arg("fc2_smooth_scale") = std::nullopt,
-            py::arg("fc_scale_blkn") = std::128, py::arg("fc_scale_blkk") = std::128);
+            py::arg("input_scale") = std::nullopt,
+            py::arg("fc_scale_blkn") = 128, py::arg("fc_scale_blkk") = 128,
+	    py::arg("fc2_smooth_scale") = std::nullopt);
       m.def("add", &aiter_add, "apply for add with transpose and broadcast.");
       m.def("mul", &aiter_mul, "apply for mul with transpose and broadcast.");
       m.def("sub", &aiter_sub, "apply for sub with transpose and broadcast.");
