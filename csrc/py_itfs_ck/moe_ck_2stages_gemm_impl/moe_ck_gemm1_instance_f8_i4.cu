@@ -15,7 +15,6 @@ void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &st
 {
     ck::index_t StrideA = K;
     ck::index_t StrideB = K;
-    ck::index_t StrideD = 0;
     ck::index_t StrideE = N;
     ck::index_t KBatch = 1;
     using A0DataType       = F8;
