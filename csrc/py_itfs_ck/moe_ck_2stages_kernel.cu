@@ -74,7 +74,7 @@ void ck_moe_stage1(torch::Tensor &hidden_states,     // [m, k], input token
         using CDEElementOp = TypeCast;
         CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, AccDataType, EDataType, CDEElementOp, MPerBlock);
     }
-    else if (hidden_states.dtype() == at::ScalarType::Float8_e4m3fnuz && w1.dtype() == at::ScalarType::Int)
+    else if (hidden_states.dtype() == at::ScalarType::Float8_e4m3fnuz && w1.dtype() == at::ScalarType::UInt32)
     {
         using A0DataType = F8;
         using B0DataType = I4;
@@ -204,7 +204,7 @@ void ck_moe_stage2(torch::Tensor &inter_states,      // [m, k], input token
         using CDEElementOp = TypeCastExpertWeight;
         CK_MOE_STAGE2_GEMM_IMPL(A0DataType, B0DataType, AccDataType, EDataType, CDEElementOp, MPerBlock);
     }
-    else if (inter_states.dtype() == at::ScalarType::Float8_e4m3fnuz && w2.dtype() == at::ScalarType::Int)
+    else if (inter_states.dtype() == at::ScalarType::Float8_e4m3fnuz && w2.dtype() == at::ScalarType::UInt32)
     {
         using A0DataType = F8;
         using B0DataType = I4;

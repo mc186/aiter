@@ -1,6 +1,6 @@
 #include "moe_ck_gemm.hpp"
 template<>
-void ck_moe_stage2_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &stream, int tokens, int sorted_size, int N, int K,
+void ck_moe_stage2_gemm<F8, I4, F32, F16, MulABScaleExpertWeight, 128>(const hipStream_t &stream, int tokens, int sorted_size, int N, int K,
                         int topk,
                         void *&inter_states,            // [max_num_tokens_padded, k], input token
                         void *&w1,                      // [e, n, k]/[e, 2*n, k], pre-shuffle([e, nr, kr, w])
