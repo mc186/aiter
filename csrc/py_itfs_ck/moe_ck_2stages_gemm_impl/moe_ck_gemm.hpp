@@ -25,9 +25,11 @@ using F16 = ck::half_t;
 using B16 = ck::bhalf_t;
 using F8 = ck::f8_t;
 using F32 = float;
+using I4  = ck::pk_i4_t;
 
 using Row = ck::tensor_layout::gemm::RowMajor;
 using Col = ck::tensor_layout::gemm::ColumnMajor;
+
 
 struct TypeCast
 {
