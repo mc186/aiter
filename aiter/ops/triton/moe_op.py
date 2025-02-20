@@ -199,7 +199,7 @@ def _fused_moe_kernel(
     c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
     tl.store(c_ptrs, accumulator, mask=c_mask)
 
-def moe_triton(A: torch.Tensor,
+def fused_moe_kernel(A: torch.Tensor,
                             B: torch.Tensor,
                             C: torch.Tensor,
                             A_scale: Optional[torch.Tensor],
@@ -276,3 +276,43 @@ def moe_triton(A: torch.Tensor,
         **config,
     )
 
+
+def fused_moe_kernel_persistent(A: torch.Tensor,
+                            B: torch.Tensor,
+                            C: torch.Tensor,
+                            A_scale: Optional[torch.Tensor],
+                            B_scale: Optional[torch.Tensor],
+                            topk_weights: torch.Tensor,
+                            topk_ids: torch.Tensor,
+                            sorted_token_ids: torch.Tensor,
+                            expert_ids: torch.Tensor,
+                            num_tokens_post_padded: torch.Tensor,
+                            mul_routed_weight: bool,
+                            top_k: int,
+                            config: Dict[str, Any],
+                            compute_type: tl.dtype,
+                            use_fp8_w8a8: bool,
+                            use_int8_w8a16: bool,
+                            block_shape: Optional[List[int]] = None) -> None:
+
+def topk_softmax(
+    topk_weights:torch.Tensor,
+    topk_indices:torch.Tensor,
+    token_expert_indices:torch.Tensor,
+    gating_output:torch.Tensor,
+    need_renorm: bool,
+): 
+
+
+def moe_sum(input:torch.Tensor, output:torch.Tensor): 
+
+
+def moe_align_block_size(
+    topk_ids:torch.Tensor,
+    num_experts: int,
+    block_size: int,
+    sorted_token_ids:torch.Tensor,
+    experts_ids:torch.Tensor,
+    token_nums:torch.Tensor,
+    num_tokens_post_pad:torch.Tensor,
+): 
