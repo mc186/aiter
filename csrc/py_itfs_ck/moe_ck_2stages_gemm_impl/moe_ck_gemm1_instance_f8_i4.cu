@@ -61,7 +61,6 @@ void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &st
     auto invoker = device_op.MakeInvoker();
 
     constexpr ck::index_t NumDTensor = DsDataType::Size();
-    constexpr ck::index_t I0 = 0;
     auto argument =
         device_op.MakeArgument(sorted_token_ids,
                                sorted_expert_ids,
@@ -78,7 +77,7 @@ void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &st
                                K,
                                StrideA,
                                StrideB,
-                               std::array<ck::index_t, NumDTensor>{I0, I0},
+                               std::array<ck::index_t, NumDTensor>{0, 0},
                                StrideE,
                                KBatch,
                                a_element_op,

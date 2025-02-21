@@ -16,7 +16,6 @@ void ck_moe_stage2_gemm<F8, I4, F32, F16, MulABScaleExpertWeight, 128>(const hip
 {
     ck::index_t StrideA = K;
     ck::index_t StrideB = K;
-    ck::index_t StrideD = 0;
     ck::index_t StrideE = N;
     ck::index_t KBatch = 1;
     using A0DataType       = F8;
@@ -80,7 +79,6 @@ void ck_moe_stage2_gemm<F8, I4, F32, F16, MulABScaleExpertWeight, 128>(const hip
     auto invoker = device_op.MakeInvoker();
 
     constexpr ck::index_t NumDTensor = DsDataType::Size();
-    constexpr ck::index_t I0 = 0;
     auto argument =
         device_op.MakeArgument(sorted_token_ids,
                                sorted_expert_ids,
@@ -98,7 +96,7 @@ void ck_moe_stage2_gemm<F8, I4, F32, F16, MulABScaleExpertWeight, 128>(const hip
                                K,
                                StrideA,
                                StrideB,
-                               std::array<ck::index_t, NumDTensor>{I0, I0, I0},
+                               std::array<ck::index_t, NumDTensor>{0, 0, 0},
                                StrideE,
                                KBatch,
                                a_element_op,

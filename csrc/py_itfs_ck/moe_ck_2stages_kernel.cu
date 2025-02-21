@@ -86,7 +86,7 @@ void ck_moe_stage1(torch::Tensor &hidden_states,     // [m, k], input token
         using CDEElementOp = MulABScale;
         if (out.dtype() == at::ScalarType::Half)
         {
-            CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, AccDataType, F16, CDEElementOp, 128);
+            CK_MOE_STAGE1_GEMM_IMPL(A0DataType, B0DataType, AccDataType, F16, CDEElementOp, MPerBlock);
         }
         // else if (out.dtype() == at::ScalarType::BFloat16)
         // {
@@ -216,7 +216,7 @@ void ck_moe_stage2(torch::Tensor &inter_states,      // [m, k], input token
         using CDEElementOp = MulABScaleExpertWeight;
         if (out.dtype() == at::ScalarType::Half)
         {
-            CK_MOE_STAGE2_GEMM_IMPL(A0DataType, B0DataType, AccDataType, F16, CDEElementOp, 128);
+            CK_MOE_STAGE2_GEMM_IMPL(A0DataType, B0DataType, AccDataType, F16, CDEElementOp, MPerBlock);
         }
         // else if (out.dtype() == at::ScalarType::BFloat16)
         // {

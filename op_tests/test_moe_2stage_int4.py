@@ -240,6 +240,7 @@ def ck_moe_fused_2stages(hidden_states,
 
 def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=False, shared_E=0):
     input = torch.randn((token, model_dim), dtype=dtype, device="cuda")
+    # input = torch.ones_like(input)
     if use_g1u1:
         w1 = torch.randn((E+shared_E, inter_dim*2, model_dim),
                          dtype=dtype, device="cuda") / 10
@@ -254,6 +255,7 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     E, model_dim, inter_dim = w2.shape
     M, topk = topk_ids.shape
     BLOCK_SIZE_M = 128
+    # topk_weights = torch.ones_like(topk_weights)
     sorted_ids, sorted_weights, sorted_expert_ids, num_valid_ids, moe_buf = moe_sorting_ck(topk_ids, topk_weights, E,
                                                                                            model_dim, dtype, BLOCK_SIZE_M)
 
@@ -271,8 +273,9 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1_qt)))
     w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2_qt)))
     a1_qt, a1_scale = aiter.per_tensor_quant(input,  quant_dtype=quant_dtype)
+    
     # a1_qt, a1_scale = aiter.per_tensor_quant_fp8_hip(input)
-
+    # w1_scale = torch.ones_like(w1_scale)
     out1_ref, us_ref = torch_moe_stage1(a1_qt, w1_qt,
                                         w2_qt,
                                         topk_weights, topk_ids,
@@ -304,14 +307,10 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     out_ref = torch_moe(input, w1, w2, topk_weights, topk_ids)
 
     checkAllclose(out_ref, out2_ref, msg="[torch] 1_stage vs 2_stage")
-
-
-    print("########debug type:",type(a1_qt),type(w1_qt))
-
-
+    # a1_scale = torch.full([w1.shape[1], E], a1_scale, device="cuda")
     out1_qt, us = ck_moe_stage1(a1_qt,
-                                shuffle_weight(w1_qt, layout=(32, 32)),
-                                w2,
+                                w1b,
+                                w2b,
                                 sorted_ids,
                                 sorted_expert_ids,
                                 num_valid_ids,
@@ -340,18 +339,18 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     #checkAllclose(out2_ref, out2_qt,
     #              msg=f'ck_moe_stage2:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
 
-    #out_ck_qt, us = ck_moe_fused_2stages(input,
-    #                                     shuffle_weight(
-    #                                         w1_qt, layout=(32, 32)),
-    #                                     shuffle_weight(
-    #                                         w2_qt, layout=(32, 32)),
-    #                                     topk_weights, topk_ids,
-    #                                     w1_scale, w2_scale,
-    #                                     #  block_size=BLOCK_SIZE_M
-    #                                     )
-#
-    #checkAllclose(out2_ref, out_ck_qt,
-    #              msg=f'ck_moe_fused_2stages:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
+    out_ck_qt, us = ck_moe_fused_2stages(input,
+                                        shuffle_weight(
+                                            w1_qt, layout=(32, 32)),
+                                        shuffle_weight(
+                                            w2_qt, layout=(32, 32)),
+                                        topk_weights, topk_ids,
+                                        w1_scale, w2_scale,
+                                        #  block_size=BLOCK_SIZE_M
+                                        )
+
+    checkAllclose(out2_ref, out_ck_qt,
+                 msg=f'ck_moe_fused_2stages:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
 
     #out_ck_nqt, us = ck_moe_fused_2stages(input,
     #                                      shuffle_weight(w1, layout=(32, 32)),
