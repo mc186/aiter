@@ -250,6 +250,7 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     w2 = torch.randn((E+shared_E, model_dim, inter_dim),
                      dtype=dtype, device="cuda")
     score = torch.randn((token, E), device="cuda", dtype=dtype)
+    
     topk_weights, topk_ids = fused_topk(input, score, topk, True)
 
     E, model_dim, inter_dim = w2.shape
@@ -261,6 +262,8 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
 
     quant_dtype = torch.float8_e4m3fnuz
     quant_dtype_w = torch.int8
+    w1 = torch.ones_like(w1)
+    # w2 = torch.ones_like(w2)
     w1_qt, w1_scale = aiter.pertoken_quant(w1.view(E, -1),
                                            quant_dtype=quant_dtype_w)
     w2_qt, w2_scale = aiter.pertoken_quant(w2.view(E, -1),
@@ -273,9 +276,11 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1_qt)))
     w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2_qt)))
     a1_qt, a1_scale = aiter.per_tensor_quant(input,  quant_dtype=quant_dtype)
-    
+    a1_qt = torch.ones_like(a1_qt)
     # a1_qt, a1_scale = aiter.per_tensor_quant_fp8_hip(input)
     # w1_scale = torch.ones_like(w1_scale)
+    w1_scale = torch.ones_like(w1_scale)*0.01
+    a1_scale = torch.ones_like(a1_scale)*0.01
     out1_ref, us_ref = torch_moe_stage1(a1_qt, w1_qt,
                                         w2_qt,
                                         topk_weights, topk_ids,
@@ -307,6 +312,11 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     out_ref = torch_moe(input, w1, w2, topk_weights, topk_ids)
 
     checkAllclose(out_ref, out2_ref, msg="[torch] 1_stage vs 2_stage")
+    # w1b = torch.ones_like(w1b).cpu()*286331153
+    # w1b = w1b.cuda()
+    print(sorted_ids)
+    print(sorted_expert_ids)
+    print(num_valid_ids)
     # a1_scale = torch.full([w1.shape[1], E], a1_scale, device="cuda")
     out1_qt, us = ck_moe_stage1(a1_qt,
                                 w1b,
@@ -316,6 +326,8 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
                                 num_valid_ids,
                                 w1_scale, a1_scale,
                                 dtype, topk, BLOCK_SIZE_M)
+    print(out1_qt)
+    print(out1_ref)
     checkAllclose(out1_ref, out1_qt,
                   msg=f'ck_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{quant_dtype})')
 #

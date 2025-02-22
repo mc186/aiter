@@ -1,4 +1,5 @@
 #include "moe_ck_gemm.hpp"
+#include <bitset>
 template<>
 void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &stream, int tokens, int sorted_size, int N, int K,
                         int topk,
@@ -51,7 +52,7 @@ void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &st
                 S<4, 64, 1>, S<1, 0, 2>, S<1, 0, 2>, 2, 16, 16, 0,
                 S<2, 128, 1>, S<1, 0, 2>, S<1, 0, 2>, 2, 32, 32, 0,
                 4,    1,   S<1, 32, 1, 8>, S<4, 1, 1>,
-                ck::BlockGemmPipelineScheduler::Intrawave, ck::BlockGemmPipelineVersion::v3, Nswizzle, true, A0DataType>;
+                ck::BlockGemmPipelineScheduler::Intrawave, ck::BlockGemmPipelineVersion::v1, Nswizzle, true, A0DataType>;
     
     auto a_element_op   = AElementOp{};
     auto b_element_op   = BElementOp{};
@@ -61,6 +62,23 @@ void ck_moe_stage1_gemm<F8, I4, F32, F16, MulABScale, 128>(const hipStream_t &st
     auto invoker = device_op.MakeInvoker();
 
     constexpr ck::index_t NumDTensor = DsDataType::Size();
+    std::cout<<"NumDTensor: "<<NumDTensor<<std::endl;
+    std::cout<<"sorted_token_ids: "<<static_cast<int*>(sorted_token_ids)[0]<<std::endl;
+    std::cout<<"sorted_expert_ids: "<<static_cast<int*>(sorted_expert_ids)[0]<<std::endl;
+    std::cout<<"num_valid_ids: "<<static_cast<int*>(num_valid_ids)[0]<<std::endl;
+    std::cout<<"hidden_states: "<<ck::type_convert<float>(static_cast<F8*>(hidden_states)[0])<<std::endl;
+    std::cout<<"w1: "<<std::bitset<32>(static_cast<uint32_t*>(w1)[0])<<std::endl;
+    std::cout<<"w1_scale: "<<static_cast<float*>(w1_scale.value())[0]<<std::endl;
+    std::cout<<"a1_scale: "<<static_cast<float*>(a1_scale.value())[0]<<std::endl;
+    std::cout<<"tokens: "<<tokens<<std::endl;
+    std::cout<<"topk: "<<topk<<std::endl;
+    std::cout<<"sorted_size: "<<sorted_size<<std::endl;
+    std::cout<<"N: "<<N<<std::endl;
+    std::cout<<"K: "<<K<<std::endl;
+    std::cout<<"StrideA: "<<StrideA<<std::endl;
+    std::cout<<"StrideB: "<<StrideB<<std::endl;
+    std::cout<<"StrideE: "<<StrideE<<std::endl;
+    std::cout<<"KBatch: "<<KBatch<<std::endl;
     auto argument =
         device_op.MakeArgument(sorted_token_ids,
                                sorted_expert_ids,
