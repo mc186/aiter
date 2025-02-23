@@ -14,6 +14,8 @@ from aiter import pertoken_quant
 from aiter.fused_moe_gelu import fused_topk
 from aiter.fused_moe_bf16_asm import asm_moe, torch_moe, moe_sorting_ck
 from op_tests.int4_utils import *
+from aiter.ops.shuffle import shuffle_weight
+
 
 # @perftest(num_iters=3)
 def torch_moe_stage1(hidden_states,
@@ -254,27 +256,6 @@ def generate_repeated_tensor(input_tensor):
     repeated_tensor = repeated_tensor.reshape(shape)
     return repeated_tensor
 
-def shuffle_weight222(x: torch.Tensor, layout=(32, 32)) -> torch.Tensor:
-    # Hardcode BLOCK_K and BLOCK_N
-    IN, IK = layout
-    BK = IK*2
-    K = 32
-    BN = IN
-    assert (x.shape[-2] %
-            BN == 0), f'{x.shape[-2]} % {BN} == {x.shape[-2] % BN }'
-    assert (x.shape[-1] %
-            BK == 0), f'{x.shape[-1]} % {BK} == {x.shape[-1] % BK }'
-
-    x_ = x
-    x_ = x_.view(-1,
-                 x.shape[-2]//BN, BN,
-                 x.shape[-1]//BK, BK//K, K)
-    x_ = x_.permute(0, 1, 3, 4, 2, 5)
-    x_ = x_.contiguous()
-    x_ = x_.view(*x.shape)
-    return x_
-
-
 def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=False, shared_E=0):
     input = torch.randn((token, model_dim), dtype=dtype, device="cuda")
     if use_g1u1:
@@ -304,7 +285,7 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
                                            quant_dtype=quant_dtype_w, dtypeMax=7)
     w2_qt, w2_scale = aiter.pertoken_quant(w2.view(E, -1),
                                            quant_dtype=quant_dtype_w, dtypeMax=7)
-    a1_qt, a1_scale = aiter.per_tensor_quant(input,  quant_dtype=quant_dtype, dtypeMax=7)
+    a1_qt, a1_scale = aiter.per_tensor_quant(input,  quant_dtype=quant_dtype)
     w1_qt = w1_qt.view(w1.shape)
     w2_qt = w2_qt.view(w2.shape)
     sp1 = (E+shared_E, inter_dim)
@@ -315,8 +296,8 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     # w1_scale = torch.ones_like(w1_scale)
     # a1_scale = torch.ones_like(a1_scale)
     # b implement
-    w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight222(w1_qt)))
-    w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight222(w2_qt)))
+    w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1_qt, (32, 32), use_int4=True)))
+    w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2_qt, (32, 32), use_int4=True)))
     # print("a1:",a1_qt, a1_scale)
     # print("w1:",w1_qt, w1_scale)
     # print("topk:", topk_weights)
