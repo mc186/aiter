@@ -115,7 +115,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 
       m.def("get_graph_buffer_ipc_meta", &get_graph_buffer_ipc_meta);
       m.def("register_graph_buffers", &register_graph_buffers);
-      m.def("register_graph_buffers", &register_graph_buffers);
 
       m.def("allocate_meta_buffer", &allocate_meta_buffer);
       m.def("get_meta_buffer_ipc_handle", &get_meta_buffer_ipc_handle);
