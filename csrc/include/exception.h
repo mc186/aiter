@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FLASHINFER_EXCEPTION_H_
-#define FLASHINFER_EXCEPTION_H_
+#pragma once
 
 #include <exception>
 #include <sstream>
@@ -44,5 +43,3 @@ class Error : public std::exception {
   }
 
 }  // namespace flashinfer
-
-#endif  // FLASHINFER_EXCEPTION_H_

@@ -5,8 +5,7 @@
  * but straightforward and good for early iterations of development.
  * Smarter ones are expected to be implemented in futuer iterations.
  */
-#ifndef FLASHINFER_GPU_DEFINES_CUDA_HIP_H_
-#define FLASHINFER_GPU_DEFINES_CUDA_HIP_H_
+#pragma once
 
 // To workaround some unexpected HIPify behavior
 #if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
@@ -135,5 +134,3 @@
 #endif
 
 #endif  // gpu_assert
-
-#endif  // FLASHINFER_GPU_DEFINES_CUDA_HIP_H_

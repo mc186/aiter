@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FLASHINFER_MATH_CUH_
-#define FLASHINFER_MATH_CUH_
+#pragma once
 
 #if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
 // #ifdef __HIPCC_RTC__  // Probably redundant
@@ -290,4 +289,3 @@ __forceinline__ __device__ half tanh(half x) {
 
 }  // namespace math
 }  // namespace flashinfer
-#endif  // FLASHINFER_MATH_CUH_

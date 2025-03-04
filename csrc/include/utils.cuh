@@ -1,21 +1,6 @@
-/*
- * Copyright (c) 2023 by FlashInfer team.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-#ifndef FLASHINFER_UTILS_CUH_
-#define FLASHINFER_UTILS_CUH_
-
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+#pragma once
 
 #if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
 #include "./gpu_defines_hip_hip.h"
@@ -347,5 +332,3 @@ __device__ __host__ T convert_float_to_16bits(float val) {
 #endif
 
 }  // namespace flashinfer
-
-#endif  // FLASHINFER_UTILS_CUH_

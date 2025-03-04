@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FLASHINFER_SAMPLING_CUH_
-#define FLASHINFER_SAMPLING_CUH_
+#pragma once
 
 #if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
 #include <hipcub/block/block_adjacent_difference.hpp>
@@ -1587,5 +1586,3 @@ cudaError_t ChainSpeculativeSampling(DType* draft_probs, IdType* draft_token_ids
 }  // namespace sampling
 
 }  // namespace flashinfer
-
-#endif  // FLASHINFER_SAMPLING_CUH_
