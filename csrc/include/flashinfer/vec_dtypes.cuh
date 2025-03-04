@@ -16,7 +16,7 @@
 #ifndef VEC_DTYPES_CUH_
 #define VEC_DTYPES_CUH_
 
-#include "flashinfer/gpu_defines_cuda_hip.h"
+#include "gpu_defines_cuda_hip.h"
 
 #if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
 #include <hip/hip_bf16.h>

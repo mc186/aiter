@@ -30,9 +30,9 @@
 
 #include <numeric>
 
-#include "flashinfer/math.cuh"
-#include "flashinfer/utils.cuh"
-#include "flashinfer/vec_dtypes.cuh"
+#include "math.cuh"
+#include "utils.cuh"
+#include "vec_dtypes.cuh"
 
 namespace flashinfer {
 

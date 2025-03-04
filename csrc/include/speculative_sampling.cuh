@@ -19,7 +19,7 @@
 
 #include <assert.h>
 
-#include <flashinfer/sampling.cuh>
+#include <sampling.cuh>
 
 namespace flashinfer {
 

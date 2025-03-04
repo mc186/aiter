@@ -39,7 +39,7 @@
 #include <vector>
 #include <type_traits>
 
-#include "flashinfer/exception.h"
+#include "exception.h"
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)

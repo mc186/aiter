@@ -104,7 +104,7 @@ def rename_cpp_to_cu(els, dst, recurisve=False):
                 if os.path.isdir(f'{el}/{entry}'):
                     if recurisve:
                         ret += rename_cpp_to_cu([f'{el}/{entry}'],
-                                                f'{dst}/{entry}', recurisve)
+                                                dst, recurisve)
                     continue
                 do_rename_and_mv(entry, el, dst, ret)
         else:
