@@ -9,11 +9,9 @@
 namespace flashinfer {
 
 namespace sampling {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
 using namespace hipcub;
-#else
-using namespace cub;
-#endif
+
 
 template <uint32_t BLOCK_THREADS, BlockScanAlgorithm SCAN_ALGORITHM, BlockReduceAlgorithm REDUCE_ALGORITHM,
           uint32_t VEC_SIZE, bool DETERMINISTIC, typename DType, typename IdType>
@@ -84,13 +82,8 @@ __global__ void TreeSpeculativeSamplingTargetOnly(IdType* predicts, IdType* acce
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       relu_q_minus_p[j] = max(q_vec[j] - p_vec[j], DType(0));
     }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     sum_relu_q_minus_p += BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                               .Sum(relu_q_minus_p);
-#else
-    sum_relu_q_minus_p += BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-                              .Sum<VEC_SIZE>(relu_q_minus_p);
-#endif
     __syncthreads();
   }
   if (tx == 0) {
@@ -164,16 +157,10 @@ cudaError_t TreeSpeculativeSamplingTargetOnly(IdType* predicts, IdType* output_t
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = TreeSpeculativeSamplingTargetOnly<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE, DETERMINISTIC,
                                                         DType, IdType>;
-
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
         FLASHINFER_CUDA_CALL(hipFuncSetAttribute(reinterpret_cast<const void*>(kernel), hipFuncAttributeMaxDynamicSharedMemorySize, smem_size));
         FLASHINFER_CUDA_CALL(hipLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
-#else
-        FLASHINFER_CUDA_CALL(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
-#endif
       })});
-  return cudaSuccess;
+  return hipSuccess;
 }
 
 }  // namespace sampling

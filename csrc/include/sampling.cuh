@@ -15,36 +15,23 @@
  */
 #pragma once
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
 #include <hipcub/block/block_adjacent_difference.hpp>
 #include <hipcub/block/block_reduce.hpp>
 #include <hipcub/block/block_scan.hpp>
 #include <limits>
-#else
-#include <cub/block/block_adjacent_difference.cuh>
-#include <cub/block/block_reduce.cuh>
-#include <cub/block/block_scan.cuh>
-#include <cuda/std/limits>
-#endif
-
 #include <numeric>
 
-#include "math.cuh"
 #include "utils.cuh"
 #include "vec_dtypes.cuh"
 
 namespace flashinfer {
 
 namespace sampling {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
 using namespace hipcub;
 template <typename T>
 using numeric_limits = std::numeric_limits<T>;
-#else
-using namespace cub;
-template <typename T>
-using numeric_limits = cuda::std::numeric_limits<T>;
-#endif
+
 
 #define DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, ...) \
   if (deterministic) {                                            \
@@ -134,32 +121,20 @@ __device__ __forceinline__ void DeterministicInclusiveSum(
 
 #pragma unroll
   for (uint32_t offset = 1; offset < 32; offset *= 2) {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     T tmp = __shfl_up(thread_exclusive_prefix_sum, offset);
-#else
-    T tmp = __shfl_up_sync(0xffffffff, thread_exclusive_prefix_sum, offset);
-#endif
     if ((threadIdx.x + 1) % (offset * 2) == 0) {
       thread_exclusive_prefix_sum += tmp;
     }
   }
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
   T warp_sum = __shfl(thread_exclusive_prefix_sum, threadIdx.x | 0xffffffff);
-#else
-  T warp_sum = __shfl_sync(0xffffffff, thread_exclusive_prefix_sum, threadIdx.x | 0xffffffff);
-#endif
   if (threadIdx.x % 32 == 31) {
     thread_exclusive_prefix_sum = 0;
   }
 
 #pragma unroll
   for (uint32_t offset = 16; offset >= 1; offset /= 2) {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     T tmp = __shfl_xor(thread_exclusive_prefix_sum, offset);
-#else
-    T tmp = __shfl_xor_sync(0xffffffff, thread_exclusive_prefix_sum, offset);
-#endif
     if ((threadIdx.x + 1) % (offset * 2) == 0) {
       thread_exclusive_prefix_sum = tmp + thread_exclusive_prefix_sum;
     }
@@ -177,11 +152,7 @@ __device__ __forceinline__ void DeterministicInclusiveSum(
 
 #pragma unroll
     for (uint32_t offset = 1; offset < 32; offset *= 2) {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       T tmp = __shfl_up(warp_exclusive_prefix_sum, offset);
-#else
-      T tmp = __shfl_up_sync(0xffffffff, warp_exclusive_prefix_sum, offset);
-#endif
       if ((threadIdx.x + 1) % (offset * 2) == 0) {
         warp_exclusive_prefix_sum += tmp;
       }
@@ -193,11 +164,7 @@ __device__ __forceinline__ void DeterministicInclusiveSum(
 
 #pragma unroll
     for (uint32_t offset = 16; offset >= 1; offset /= 2) {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       T tmp = __shfl_xor(warp_exclusive_prefix_sum, offset);
-#else
-      T tmp = __shfl_xor_sync(0xffffffff, warp_exclusive_prefix_sum, offset);
-#endif
       if ((threadIdx.x + 1) % (offset * 2) == 0) {
         warp_exclusive_prefix_sum = tmp + warp_exclusive_prefix_sum;
       }
@@ -231,15 +198,11 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
     prob_greater_than_threshold[j] = (prob_vec[j] > threshold) ? prob_vec[j] : T(0);
     valid[j] = prob_vec[j] > threshold && (i * BLOCK_THREADS + tx) * VEC_SIZE < d;
   }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
   T aggregate_local =
       BlockReduce<T, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage->block_prim.reduce)
           .Sum(prob_greater_than_threshold);
-#else
-  T aggregate_local =
-      BlockReduce<T, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage->block_prim.reduce)
-          .Sum<VEC_SIZE>(prob_greater_than_threshold);
-#endif
+
   if (tx == 0) {
     temp_storage->block_aggregate.value = aggregate_local;
   }
@@ -251,14 +214,8 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
       DeterministicInclusiveSum<VEC_SIZE, BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM, T>(
           prob_greater_than_threshold, inclusive_cdf, temp_storage);
     } else {
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       BlockScan<T, BLOCK_THREADS, SCAN_ALGORITHM>(temp_storage->block_prim.scan)
           .InclusiveSum(prob_greater_than_threshold, inclusive_cdf);
-#else
-      BlockScan<T, BLOCK_THREADS, SCAN_ALGORITHM>(temp_storage->block_prim.scan)
-          .InclusiveSum<VEC_SIZE>(prob_greater_than_threshold, inclusive_cdf);
-#endif
-
       __syncthreads();
     }
 
@@ -268,7 +225,7 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
     }
 
     bool greater_than_u_diff[VEC_SIZE];
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
 #ifdef FLASHINFER_CUB_SUBTRACTLEFT_DEFINED
     BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
         .SubtractLeft(greater_than_u, greater_than_u_diff, BoolDiffOp());
@@ -276,16 +233,6 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
     BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
         .FlagHeads(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
 #endif
-#else
-#ifdef FLASHINFER_CUB_SUBTRACTLEFT_DEFINED
-    BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
-        .SubtractLeft<VEC_SIZE>(greater_than_u, greater_than_u_diff, BoolDiffOp());
-#else
-    BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
-        .FlagHeads<VEC_SIZE>(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
-#endif
-#endif
-
     __syncthreads();
 
 #pragma unroll
@@ -395,15 +342,10 @@ __global__ void TopKSamplingFromProbKernel(DType* probs, DType* uniform_samples,
         probs_gt_pivot[j] = {(probs_vec[j] > pivot) ? probs_vec[j] : DType(0),
                              (probs_vec[j] > pivot && (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d)};
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
       aggregate_gt_pivot += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                                 temp_storage.block_prim.reduce_pair)
                                 .Sum(probs_gt_pivot);
-#else
-      aggregate_gt_pivot += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
-                                temp_storage.block_prim.reduce_pair)
-                                .Sum<VEC_SIZE>(probs_gt_pivot);
-#endif
 
       if (tx == 0) {
         temp_storage.block_aggregate.pair = aggregate_gt_pivot;
@@ -488,13 +430,8 @@ __global__ void TopPSamplingFromProbKernel(DType* probs, DType* uniform_samples,
       for (uint32_t j = 0; j < VEC_SIZE; ++j) {
         probs_gt_pivot[j] = (probs_vec[j] > pivot) ? probs_vec[j] : DType(0);
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       aggregate_gt_pivot += BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
                                 .Sum(probs_gt_pivot);
-#else
-      aggregate_gt_pivot += BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
-                                .Sum<VEC_SIZE>(probs_gt_pivot);
-#endif
 
       if (tx == 0) {
         temp_storage.block_aggregate.value = aggregate_gt_pivot;
@@ -554,13 +491,8 @@ __global__ void MinPSamplingFromProbKernel(DType* probs, DType* uniform_samples,
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       probs_[j] = probs_vec[j];
     }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     max_p = max(max_p, BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
                            .Reduce(probs_, hipcub::Max()));
-#else
-    max_p = max(max_p, BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
-                           .Reduce<VEC_SIZE>(probs_, cub::Max()));
-#endif
     __syncthreads();
   }
   if (tx == 0) {
@@ -608,13 +540,8 @@ __global__ void MinPSamplingFromProbKernel(DType* probs, DType* uniform_samples,
         probs_gt_pivot[j] = (probs_vec[j] > pivot) ? probs_vec[j] : DType(0);
       }
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       aggregate_gt_pivot += BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
                                 .Sum(probs_gt_pivot);
-#else
-      aggregate_gt_pivot += BlockReduce<DType, BLOCK_THREADS>(temp_storage.block_prim.reduce)
-                                .Sum<VEC_SIZE>(probs_gt_pivot);
-#endif
 
       if (tx == 0) {
         temp_storage.block_aggregate.value = aggregate_gt_pivot;
@@ -697,15 +624,9 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs, DType* uniform_samp
         probs_gt_pivot[j] = {(probs_vec[j] > pivot) ? probs_vec[j] : DType(0),
                              (probs_vec[j] > pivot && (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d)};
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       aggregate_gt_pivot += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                                 temp_storage.block_prim.reduce_pair)
                                 .Sum(probs_gt_pivot);
-#else
-      aggregate_gt_pivot += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
-                                temp_storage.block_prim.reduce_pair)
-                                .Sum<VEC_SIZE>(probs_gt_pivot);
-#endif
 
       if (tx == 0) {
         temp_storage.block_aggregate.pair = aggregate_gt_pivot;
@@ -782,7 +703,7 @@ cudaError_t TopKSamplingFromProb(T* probs, T* uniform_samples, IdType* output, b
                                  cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(T), d);
 
-  auto compute_capacity = GetCudaComputeCapability();
+  auto compute_capacity = GetHIPComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size =
         sizeof(SamplingTempStorage<T, BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
@@ -863,7 +784,7 @@ cudaError_t TopKTopPSamplingFromProb(T* probs, T* uniform_samples, IdType* top_k
                                      bool deterministic, cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(T), d);
 
-  auto compute_capacity = GetCudaComputeCapability();
+  auto compute_capacity = GetHIPComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size =
         sizeof(SamplingTempStorage<T, BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
@@ -929,17 +850,11 @@ __global__ void TopPRenormProbKernel(DType* probs, DType* renormed_prob, DType* 
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       probs_greater_than_pivot[j] = probs_vec[j];
     }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
     threadlocal_max_val =
         max(threadlocal_max_val,
             BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                 .Reduce(probs_greater_than_pivot, hipcub::Max()));
-#else 
-    threadlocal_max_val =
-        max(threadlocal_max_val,
-            BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-                .Reduce<VEC_SIZE>(probs_greater_than_pivot, cub::Max()));
-#endif
     __syncthreads();
   }
   if (tx == 0) {
@@ -984,22 +899,13 @@ __global__ void TopPRenormProbKernel(DType* probs, DType* renormed_prob, DType* 
       __syncthreads();
     }
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     min_gt_low = BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                      .Reduce(min_gt_low, hipcub::Min());
     __syncthreads();
     max_le_high =
         BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
             .Reduce(max_le_high, hipcub::Max());
-#else
-    min_gt_low =
-        BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-            .Reduce<VEC_SIZE>(min_gt_low, cub::Min());
-    __syncthreads();
-    max_le_high =
-        BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-            .Reduce<VEC_SIZE>(max_le_high, cub::Max());
-#endif
+
     if (tx == 0) {
       temp_storage.block_aggregate.value = threadlocal_sum;
       temp_storage.min_val = min_gt_low;
@@ -1017,7 +923,7 @@ __global__ void TopPRenormProbKernel(DType* probs, DType* renormed_prob, DType* 
     }
   } while (min_gt_low != max_le_high);
 
-  DType normalizer = math::ptx_rcp(max(sum_low, 1e-8));
+  DType normalizer = __frcp_rn(max(sum_low, 1e-8));
 
   // normalize
   for (uint32_t i = 0; i < ceil_div(d, BLOCK_THREADS * VEC_SIZE); ++i) {
@@ -1062,7 +968,6 @@ __global__ void TopKMaskLogitsKernel(DType* logits, DType* masked_logits, IdType
       for (uint32_t j = 0; j < VEC_SIZE; ++j) {
         logits_greater_than_pivot[j] = logits_vec[j];
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       threadlocal_max_val =
           max(threadlocal_max_val,
               BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
@@ -1072,17 +977,6 @@ __global__ void TopKMaskLogitsKernel(DType* logits, DType* masked_logits, IdType
           min(threadlocal_min_val,
               BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                   .Reduce(logits_greater_than_pivot, hipcub::Min()));
-#else
-      threadlocal_max_val =
-          max(threadlocal_max_val,
-              BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-                  .Reduce<VEC_SIZE>(logits_greater_than_pivot, cub::Max()));
-      __syncthreads();
-      threadlocal_min_val =
-          min(threadlocal_min_val,
-              BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-                  .Reduce<VEC_SIZE>(logits_greater_than_pivot, cub::Min()));
-#endif
       __syncthreads();
     }
     if (tx == 0) {
@@ -1129,7 +1023,6 @@ __global__ void TopKMaskLogitsKernel(DType* logits, DType* masked_logits, IdType
                 .Sum(probs_greater_than_pivot_count);
         __syncthreads();
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       min_gt_low =
           BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
               .Reduce(min_gt_low, hipcub::Min());
@@ -1137,15 +1030,6 @@ __global__ void TopKMaskLogitsKernel(DType* logits, DType* masked_logits, IdType
       max_le_high =
           BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
               .Reduce(max_le_high, hipcub::Max());
-#else
-      min_gt_low =
-          BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-              .Reduce<VEC_SIZE>(min_gt_low, cub::Min());
-      __syncthreads();
-      max_le_high =
-          BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-              .Reduce<VEC_SIZE>(max_le_high, cub::Max());
-#endif
       if (tx == 0) {
         temp_storage.block_aggregate.count = threadlocal_count_sum;
         temp_storage.min_val = min_gt_low;
@@ -1209,17 +1093,10 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
       for (uint32_t j = 0; j < VEC_SIZE; ++j) {
         probs_greater_than_pivot[j] = probs_vec[j];
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       threadlocal_max_val =
           max(threadlocal_max_val,
               BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                   .Reduce(probs_greater_than_pivot, hipcub::Max()));
-#else
-      threadlocal_max_val =
-          max(threadlocal_max_val,
-              BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-                  .Reduce<VEC_SIZE>(probs_greater_than_pivot, cub::Max()));
-#endif
       __syncthreads();
     }
     if (tx == 0) {
@@ -1261,18 +1138,11 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
             max_le_high = max(max_le_high, probs_vec[j]);
           }
         }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
         threadlocal_sum += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                                temp_storage.block_prim.reduce_pair)
                                .Sum(probs_greater_than_pivot_pair);
-#else
-        threadlocal_sum += BlockReduce<Pair<DType>, BLOCK_THREADS, REDUCE_ALGORITHM>(
-                               temp_storage.block_prim.reduce_pair)
-                               .Sum<VEC_SIZE>(probs_greater_than_pivot_pair);
-#endif
         __syncthreads();
       }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
       min_gt_low =
           BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
               .Reduce(min_gt_low, hipcub::Min());
@@ -1280,15 +1150,6 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
       max_le_high =
           BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
               .Reduce(max_le_high, hipcub::Max());
-#else
-      min_gt_low =
-          BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-              .Reduce<VEC_SIZE>(min_gt_low, cub::Min());
-      __syncthreads();
-      max_le_high =
-          BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-              .Reduce<VEC_SIZE>(max_le_high, cub::Max());
-#endif
       if (tx == 0) {
         temp_storage.block_aggregate.pair = threadlocal_sum;
         temp_storage.min_val = min_gt_low;
@@ -1306,7 +1167,7 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
       }
     } while (min_gt_low != max_le_high);
 
-    normalizer = math::ptx_rcp(max(sum_low, 1e-8));
+    normalizer = __frcp_rn(max(sum_low, 1e-8));
     pivot = low;
   }
 
@@ -1352,7 +1213,7 @@ cudaError_t TopKRenormProb(DType* probs, DType* renormed_prob, IdType* top_k_arr
                            cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(DType), d);
 
-  auto compute_capacity = GetCudaComputeCapability();
+  auto compute_capacity = GetHIPComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size = sizeof(RenormTempStorage<DType, BLOCK_THREADS, REDUCE_ALGO>);
     dim3 nblks(batch_size);
@@ -1374,7 +1235,7 @@ cudaError_t TopKMaskLogits(DType* logits, DType* masked_logits, IdType* top_k_ar
                            cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(DType), d);
 
-  auto compute_capacity = GetCudaComputeCapability();
+  auto compute_capacity = GetHIPComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size = sizeof(RenormTempStorage<DType, BLOCK_THREADS, REDUCE_ALGO>);
     dim3 nblks(batch_size);
@@ -1460,15 +1321,9 @@ __global__ void ChainSpeculativeSampling(DType* draft_probs, IdType* draft_token
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       relu_q_minus_p[j] = max(q_vec[j] - p_vec[j], DType(0));
     }
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
     sum_relu_q_minus_p +=
         BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
             .Sum(relu_q_minus_p);
-#else
-    sum_relu_q_minus_p +=
-        BlockReduce<DType, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
-            .Sum<VEC_SIZE>(relu_q_minus_p);
-#endif
     __syncthreads();
   }
   if (tx == 0) {

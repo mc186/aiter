@@ -2,29 +2,33 @@
 // Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
-#include "./gpu_defines_hip_hip.h"
-
 #include <hip/hip_bf16.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_fp8.h>
 #include <hip/hip_runtime.h>
-#elif defined(__CUDACC__) || defined(__NVCC__) || (defined(__clang__) && defined(__CUDA__)) || defined(__CUDACC_RTC__)
-#include "./gpu_defines_cuda_hip.h"
-
-#include <cuda_bf16.h>
-#include <cuda_device_runtime_api.h>
-#include <cuda_fp16.h>
-#include <cuda_fp8.h>
-#include <cuda_runtime.h>
-#endif
 
 #include <cstdint>
 #include <iostream>
 #include <vector>
 #include <type_traits>
 
-#include "exception.h"
+
+class Error : public std::exception {
+ private:
+  std::string message_;
+
+ public:
+  Error(const std::string& func, const std::string& file, int line, const std::string& message) {
+    std::ostringstream oss;
+    oss << "Error in function '" << func << "' "
+        << "at " << file << ":" << line << ": " << message;
+    message_ = oss.str();
+  }
+
+  virtual const char* what() const noexcept override { return message_.c_str(); }
+};
+
+#define FLASHINFER_ERROR(message) throw Error(__FUNCTION__, __FILE__, __LINE__, message)
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -37,9 +41,9 @@
 #ifndef NDEBUG
 #define FLASHINFER_CUDA_CALL(func, ...)                                                    \
   {                                                                                        \
-    gpuError_t e = (func);                                                                 \
-    if (e != gpuSuccess) {                                                                 \
-      std::cerr << "CUDA Error: " << gpuGetErrorString(e) << " (" << e << ") " << __FILE__ \
+    hipError_t e = (func);                                                                 \
+    if (e != hipSuccess) {                                                                 \
+      std::cerr << "CUDA Error: " << hipGetErrorString(e) << " (" << e << ") " << __FILE__ \
                 << ": line " << __LINE__ << " at function " << STR(func) << std::endl;     \
       return e;                                                                            \
     }                                                                                      \
@@ -47,8 +51,8 @@
 #else
 #define FLASHINFER_CUDA_CALL(func, ...) \
   {                                     \
-    gpuError_t e = (func);              \
-    if (e != gpuSuccess) {              \
+    hipError_t e = (func);              \
+    if (e != hipSuccess) {              \
       return e;                         \
     }                                   \
   }
@@ -267,12 +271,12 @@ __forceinline__ __device__ __host__ T1 ceil_div(const T1 x, const T2 y) {
   return (x + y - 1) / y;
 }
 
-inline std::pair<int, int> GetCudaComputeCapability() {
+inline std::pair<int, int> GetHIPComputeCapability() {
   int device_id = 0;
-  gpuError_t result = gpuGetDevice(&device_id);
+  hipError_t result = hipGetDevice(&device_id);
   int major = 0, minor = 0;
-  gpuDeviceGetAttribute(&major, gpuDevAttrComputeCapabilityMajor, device_id);
-  gpuDeviceGetAttribute(&minor, gpuDevAttrComputeCapabilityMinor, device_id);
+  hipDeviceGetAttribute(&major, hipDeviceAttributeComputeCapabilityMajor, device_id);
+  hipDeviceGetAttribute(&minor, hipDeviceAttributeComputeCapabilityMinor, device_id);
   return std::make_pair(major, minor);
 }
 
@@ -280,7 +284,7 @@ template <typename T>
 inline void DebugPrintCUDAArray(T* device_ptr, size_t size, std::string prefix = "") {
   std::vector<T> host_array(size);
   std::cout << prefix;
-  gpuMemcpy(host_array.data(), device_ptr, size * sizeof(T), gpuMemcpyDeviceToHost);
+  hipMemcpy(host_array.data(), device_ptr, size * sizeof(T), hipMemcpyDeviceToHost);
   for (size_t i = 0; i < size; ++i) {
     std::cout << host_array[i] << " ";
   }
@@ -318,7 +322,7 @@ __device__ __forceinline__ uint32_t dim4_offset(const uint32_t& dim_c, const uin
   return ((idx_d * dim_c + idx_c) * dim_b + idx_b) * dim_a + idx_a;
 }
 
-#if defined(__HIPCC__) || (defined(__clang__) && defined(__HIP__)) || defined(__HIPCC_RTC__)
+
 template <typename T>
 __device__ __host__ T convert_float_to_16bits(float val) {
   if constexpr (std::is_same_v<T, __half>) {
@@ -329,6 +333,5 @@ __device__ __host__ T convert_float_to_16bits(float val) {
     return val;
   }
 }
-#endif
 
 }  // namespace flashinfer
