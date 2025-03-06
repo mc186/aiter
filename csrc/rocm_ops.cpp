@@ -22,6 +22,7 @@
 #include "moe_ck.h"
 #include "rope.h"
 #include "speculative_sampling.h"
+#include "eagle_utils.h"
 // #include "mha_varlen_fwd.h"
 // #include "mha_varlen_bwd.h"
 // #include "mha_bwd.h"
