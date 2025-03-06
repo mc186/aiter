@@ -31,6 +31,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
       m.def("topk_softmax", &topk_softmax,
             "Apply topk softmax to the gating outputs.");
+      m.def("build_tree_kernel_efficient", build_tree_kernel_efficient, "build_tree_kernel_efficient");
+      m.def("build_tree_kernel", build_tree_kernel, "build_tree_kernel");
       m.def("moe_align_block_size", &moe_align_block_size,
             "Aligning the number of tokens to be processed by each expert such "
             "that it is divisible by the block size.");

@@ -72,9 +72,20 @@
             "f'{AITER_CSRC_DIR}/kernels/speculative_sampling.cu'"
         ],
         "flags_extra_cc": [],
-        "flags_extra_hip": [
-            "'-DENABLE_FP8'"
+        "flags_extra_hip": [],
+        "extra_ldflags": "None",
+        "extra_include": [],
+        "isASM": "False",
+        "verbose": "False",
+        "blob_gen_cmd": "''"
+    },
+    "module_eagle_utils": {
+        "srcs": [
+            "f'{AITER_CSRC_DIR}/pybind/eagle_utils_pybind.cu'",
+            "f'{AITER_CSRC_DIR}/kernels/eagle_utils.cu'"
         ],
+        "flags_extra_cc": [],
+        "flags_extra_hip": [],
         "extra_ldflags": "None",
         "extra_include": [],
         "isASM": "False",
