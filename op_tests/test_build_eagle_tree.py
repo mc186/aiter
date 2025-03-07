@@ -1,4 +1,5 @@
-# NOTE: Please run this file to make sure the test cases are correct.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
 
 from typing import List
 
