@@ -29,7 +29,7 @@
             py::arg("splitData"),                                            \
             py::arg("splitLse"));
 
-#define EAGLE_UTILS_PYBIND                                                                              \
+#define EAGLE_UTILS_PYBIND                                                                               \
       m.def("build_tree_kernel_efficient", &build_tree_kernel_efficient, "build_tree_kernel_efficient"); \
       m.def("build_tree_kernel", &build_tree_kernel, "build_tree_kernel");
 

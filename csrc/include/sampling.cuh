@@ -26,8 +26,8 @@
 #include <limits>
 #include <numeric>
 
-#include "utils.cuh"
 #include "vec_dtypes.cuh"
+#include "aiter_hip_common.h"
 
 namespace flashinfer {
 
@@ -674,7 +674,7 @@ cudaError_t SamplingFromProb(T* probs, T* uniform_samples, IdType* output, uint3
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = SamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                              DETERMINISTIC, T, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;
@@ -695,7 +695,7 @@ cudaError_t ParallelSamplingFromProb(T* probs, T* uniform_samples, IdType* outpu
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = SamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                              DETERMINISTIC, T, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;
@@ -721,9 +721,9 @@ cudaError_t TopKSamplingFromProb(T* probs, T* uniform_samples, IdType* output, b
         vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
           auto kernel = TopKSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                                    DETERMINISTIC, T, IdType>;
-          FLASHINFER_CUDA_CALL(
+          HIP_CALL(
               cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-          FLASHINFER_CUDA_CALL(
+          HIP_CALL(
               cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
         })});
     return cudaSuccess;
@@ -749,9 +749,9 @@ cudaError_t TopPSamplingFromProb(T* probs, T* uniform_samples, IdType* output, b
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = TopPSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                                  DETERMINISTIC, T, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;
@@ -774,9 +774,9 @@ cudaError_t MinPSamplingFromProb(T* probs, T* uniform_samples, T* min_p_arr, IdT
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = MinPSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                                  DETERMINISTIC, T, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;
@@ -802,9 +802,9 @@ cudaError_t TopKTopPSamplingFromProb(T* probs, T* uniform_samples, IdType* top_k
         vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
           auto kernel = TopKTopPSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO,
                                                        VEC_SIZE, DETERMINISTIC, T, IdType>;
-          FLASHINFER_CUDA_CALL(
+          HIP_CALL(
               cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-          FLASHINFER_CUDA_CALL(
+          HIP_CALL(
               cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
         })});
     return cudaSuccess;
@@ -1205,9 +1205,9 @@ cudaError_t TopPRenormProb(DType* probs, DType* renormed_prob, DType* top_p_arr,
   void* args[] = {&probs, &renormed_prob, &top_p_arr, &top_p_val, &d};
   DISPATCH_ALIGNED_VEC_SIZE(vec_size, VEC_SIZE, {
     auto kernel = TopPRenormProbKernel<BLOCK_THREADS, REDUCE_ALGO, VEC_SIZE, DType>;
-    FLASHINFER_CUDA_CALL(
+    HIP_CALL(
         cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-    FLASHINFER_CUDA_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
+    HIP_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
   });
   return cudaSuccess;
 }
@@ -1226,9 +1226,9 @@ cudaError_t TopKRenormProb(DType* probs, DType* renormed_prob, IdType* top_k_arr
     void* args[] = {&probs, &renormed_prob, &top_k_arr, &top_k_val, &d};
     DISPATCH_ALIGNED_VEC_SIZE(vec_size, VEC_SIZE, {
       auto kernel = TopKRenormProbKernel<BLOCK_THREADS, REDUCE_ALGO, VEC_SIZE, DType, IdType>;
-      FLASHINFER_CUDA_CALL(
+      HIP_CALL(
           cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-      FLASHINFER_CUDA_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
+      HIP_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
     });
     return cudaSuccess;
   });
@@ -1248,9 +1248,9 @@ cudaError_t TopKMaskLogits(DType* logits, DType* masked_logits, IdType* top_k_ar
     void* args[] = {&logits, &masked_logits, &top_k_arr, &top_k_val, &d};
     DISPATCH_ALIGNED_VEC_SIZE(vec_size, VEC_SIZE, {
       auto kernel = TopKMaskLogitsKernel<BLOCK_THREADS, REDUCE_ALGO, VEC_SIZE, DType, IdType>;
-      FLASHINFER_CUDA_CALL(
+      HIP_CALL(
           cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-      FLASHINFER_CUDA_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
+      HIP_CALL(cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
     });
     return cudaSuccess;
   });
@@ -1400,9 +1400,9 @@ cudaError_t ParallelTopPSamplingFromProb(T* probs, T* uniform_samples, IdType* o
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = TopPSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                                  DETERMINISTIC, T, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;
@@ -1435,9 +1435,9 @@ cudaError_t ChainSpeculativeSampling(DType* draft_probs, IdType* draft_token_ids
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = ChainSpeculativeSampling<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE,
                                                DETERMINISTIC, DType, IdType>;
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(
+        HIP_CALL(
             cudaLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return cudaSuccess;

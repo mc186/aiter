@@ -175,8 +175,8 @@ cudaError_t TreeSpeculativeSamplingTargetOnly(IdType* predicts, IdType* output_t
       vec_size, VEC_SIZE, {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
         auto kernel = TreeSpeculativeSamplingTargetOnly<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO, VEC_SIZE, DETERMINISTIC,
                                                         DType, IdType>;
-        FLASHINFER_CUDA_CALL(hipFuncSetAttribute(reinterpret_cast<const void*>(kernel), hipFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        FLASHINFER_CUDA_CALL(hipLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
+        HIP_CALL(hipFuncSetAttribute(reinterpret_cast<const void*>(kernel), hipFuncAttributeMaxDynamicSharedMemorySize, smem_size));
+        HIP_CALL(hipLaunchKernel((void*)kernel, nblks, nthrs, args, smem_size, stream));
       })});
   return hipSuccess;
 }
