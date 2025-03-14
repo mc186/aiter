@@ -43,11 +43,9 @@ def pa_fwd_asm(
     max_num_blocks: int,
     K_QScale: Optional[torch.Tensor],
     V_QScale: Optional[torch.Tensor],
-    out_: Optional[torch.Tensor] = None
+    out_: Optional[torch.Tensor] = None,
+    high_precision: Optional[int] = 1   # [0, 1, 2] 2 is the highest precision, this is only for fp8 kvcache
 ) -> torch.Tensor: ...
-
-
-MD_NAME = "module_pa"
 
 
 @compile_ops("module_pa")
@@ -67,6 +65,29 @@ def paged_attention_rocm(
     max_context_len: int,
     alibi_slopes: Optional[torch.Tensor],
     kv_cache_dtype: str,
+    k_scale: float,
+    v_scale: float,
+    fp8_out_scale: Optional[torch.Tensor],
+    partition_size: int,
+): ...
+
+@compile_ops("module_pa_ragged")
+def paged_attention_ragged(
+    out: torch.Tensor,
+    workspace_buffer: torch.Tensor,
+    query: torch.Tensor,
+    key_cache: torch.Tensor,
+    value_cache: torch.Tensor,
+    num_kv_heads: int,
+    scale: float,
+    block_tables: torch.Tensor,
+    context_lens: torch.Tensor,
+    block_size: int,
+    max_num_partitions: int,
+    alibi_slopes: Optional[torch.Tensor],
+    kv_cache_dtype: str,
+    kv_cache_layout: str,
+    logits_soft_cap: float,
     k_scale: float,
     v_scale: float,
     fp8_out_scale: Optional[torch.Tensor],
