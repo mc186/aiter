@@ -24,11 +24,11 @@
 #include <hipcub/block/block_scan.hpp>
 #include <limits>
 #include <numeric>
-
+#include <stdexcept>
 #include "vec_dtypes.cuh"
 #include "aiter_hip_common.h"
 
-namespace flashinfer {
+namespace aiter {
 
 namespace sampling {
 
@@ -36,6 +36,55 @@ using namespace hipcub;
 template <typename T>
 using numeric_limits = std::numeric_limits<T>;
 
+inline std::pair<int, int> GetCudaComputeCapability() {
+  int device_id = 0;
+  cudaGetDevice(&device_id);
+  int major = 0, minor = 0;
+  cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device_id);
+  cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device_id);
+  return std::make_pair(major, minor);
+}
+
+#define DISPATCH_ALIGNED_VEC_SIZE(aligned_vec_size, ALIGNED_VEC_SIZE, ...) \
+  switch (aligned_vec_size) {                                              \
+    case 16: {                                                             \
+      constexpr size_t ALIGNED_VEC_SIZE = 16;                              \
+      __VA_ARGS__                                                          \
+      break;                                                               \
+    }                                                                      \
+    case 8: {                                                              \
+      constexpr size_t ALIGNED_VEC_SIZE = 8;                               \
+      __VA_ARGS__                                                          \
+      break;                                                               \
+    }                                                                      \
+    case 4: {                                                              \
+      constexpr size_t ALIGNED_VEC_SIZE = 4;                               \
+      __VA_ARGS__                                                          \
+      break;                                                               \
+    }                                                                      \
+    case 2: {                                                              \
+      constexpr size_t ALIGNED_VEC_SIZE = 2;                               \
+      __VA_ARGS__                                                          \
+      break;                                                               \
+    }                                                                      \
+    case 1: {                                                              \
+      constexpr size_t ALIGNED_VEC_SIZE = 1;                               \
+      __VA_ARGS__                                                          \
+      break;                                                               \
+    }                                                                      \
+    default: {                                                             \
+      std::ostringstream err_msg;                                          \
+      err_msg << "Unsupported aligned_vec_size: " << aligned_vec_size;     \
+      throw std::invalid_argument(err_msg.str());                          \
+    }                                                                      \
+  }
+
+
+
+template <typename T1, typename T2>
+__forceinline__ __device__ __host__ T1 ceil_div(const T1 x, const T2 y) {
+  return (x + y - 1) / y;
+}
 
 #define DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, ...) \
   if (deterministic) {                                            \
@@ -707,7 +756,7 @@ cudaError_t TopKSamplingFromProb(T* probs, T* uniform_samples, IdType* output, b
                                  cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(T), d);
 
-  auto compute_capacity = GetHIPComputeCapability();
+  auto compute_capacity = GetCudaComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size =
         sizeof(SamplingTempStorage<T, BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
@@ -788,7 +837,7 @@ cudaError_t TopKTopPSamplingFromProb(T* probs, T* uniform_samples, IdType* top_k
                                      bool deterministic, cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(T), d);
 
-  auto compute_capacity = GetHIPComputeCapability();
+  auto compute_capacity = GetCudaComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size =
         sizeof(SamplingTempStorage<T, BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
@@ -1217,7 +1266,7 @@ cudaError_t TopKRenormProb(DType* probs, DType* renormed_prob, IdType* top_k_arr
                            cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(DType), d);
 
-  auto compute_capacity = GetHIPComputeCapability();
+  auto compute_capacity = GetCudaComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size = sizeof(RenormTempStorage<DType, BLOCK_THREADS, REDUCE_ALGO>);
     dim3 nblks(batch_size);
@@ -1239,7 +1288,7 @@ cudaError_t TopKMaskLogits(DType* logits, DType* masked_logits, IdType* top_k_ar
                            cudaStream_t stream = 0) {
   const uint32_t vec_size = std::gcd(16 / sizeof(DType), d);
 
-  auto compute_capacity = GetHIPComputeCapability();
+  auto compute_capacity = GetCudaComputeCapability();
   DISPATCH_COMPUTE_CAP_NUM_THREADS(compute_capacity, BLOCK_THREADS, {
     const uint32_t smem_size = sizeof(RenormTempStorage<DType, BLOCK_THREADS, REDUCE_ALGO>);
     dim3 nblks(batch_size);
@@ -1444,4 +1493,4 @@ cudaError_t ChainSpeculativeSampling(DType* draft_probs, IdType* draft_token_ids
 
 }  // namespace sampling
 
-}  // namespace flashinfer
+}  // namespace aiter

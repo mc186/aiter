@@ -52,7 +52,7 @@ FLASHINFER_INLINE __hip_bfloat162 make_bfloat162(const __hip_bfloat16 x, const _
 }
 
 
-namespace flashinfer {
+namespace aiter {
 
 #define FLASHINFER_INLINE inline __attribute__((always_inline)) __device__
 
@@ -1547,5 +1547,5 @@ struct vec_t<float, vec_size> {
   }
 };
 
-}  // namespace flashinfer
+}  // namespace aiter
 

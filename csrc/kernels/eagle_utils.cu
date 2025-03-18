@@ -27,6 +27,7 @@
 // tree_mask [draft_token*(seq_len[0]+draft_token) | draft_token*(seq_len[1]+draft_token) | ..] =
 // [sum(verified_seq_len)*draft_token+bs*draft_token*draft_token] positions [bs * draft_token] retrive_index [b,
 // draft_token] retrive_next_token [b, draft_token] retrive_next_sibling [b, draft_token]
+namespace aiter{
 __global__ void build_tree_efficient(int64_t* parent_list, int64_t* selected_index, int32_t* verified_seq_len,
                                      bool* tree_mask, int64_t* positions, int64_t* retrive_index,
                                      int64_t* retrive_next_token, int64_t* retrive_next_sibling, int topk, int depth,
@@ -210,4 +211,5 @@ void build_tree_kernel(at::Tensor parent_list, at::Tensor selected_index, at::Te
       static_cast<int32_t*>(verified_seq_len.data_ptr()), static_cast<bool*>(tree_mask.data_ptr()),
       static_cast<int64_t*>(positions.data_ptr()), static_cast<int64_t*>(retrive_index.data_ptr()), int32_t(topk),
       int32_t(depth), int32_t(draft_token_num));
+}
 }

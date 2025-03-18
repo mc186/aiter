@@ -22,8 +22,7 @@
 
 #include "speculative_sampling.h"
 #include <ATen/cuda/CUDAContext.h>
-using namespace flashinfer;
-
+namespace aiter {
 
 #define CHECK_CUDA(x) TORCH_CHECK(x.is_cuda(), #x " must be a CUDA tensor")
 
@@ -138,3 +137,4 @@ void tree_speculative_sampling_target_only(at::Tensor predicts, at::Tensor accep
   TORCH_CHECK(status == cudaSuccess,
               "TreeSpeculativeSamplingTargetOnly failed with error code " + std::string(cudaGetErrorString(status)));
 }
+} // namespace aiter

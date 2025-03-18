@@ -24,7 +24,7 @@
 
 #include <sampling.cuh>
 
-namespace flashinfer {
+namespace aiter {
 
 namespace sampling {
 
@@ -183,4 +183,4 @@ cudaError_t TreeSpeculativeSamplingTargetOnly(IdType* predicts, IdType* output_t
 
 }  // namespace sampling
 
-}  // namespace flashinfer
+}  // namespace aiter
