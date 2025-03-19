@@ -233,8 +233,8 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
     sp1 = (E+shared_E, inter_dim)
     sp2 = (E+shared_E, model_dim)
     # W int4 implement
-    w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1_qt, (32, 32), use_int4=True)))
-    w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2_qt, (32, 32), use_int4=True)))
+    w1b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w1_qt, (16, 16), use_int4=True)))
+    w2b = rearrange_4bit_elements(convert_int8_to_uint32_int4(shuffle_weight(w2_qt, (16, 16), use_int4=True)))
     out1_ref, us_ref = torch_moe_stage1(a1_qt, w1_qt,
                                         w2_qt,
                                         topk_weights, topk_ids,
@@ -371,17 +371,19 @@ def test_fmoe(dtype, token, model_dim, inter_dim, E, topk, quant='No', use_g1u1=
 #              msg=f'ck_moe_fused_2stages:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(No quant)')
 
 for dtype in [torch.float16]:
-    for m in [64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
+    for m in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
+    # for m in [176, 184, 192, 200, 208, 216, 224, 232, 240]:
+        print("M:{0}".format(m))
         for dim in [6144]:
             for inter_dim in [4096]:
                 expert, topk = 8, 2
                 test_fmoe(dtype, m, dim, inter_dim, expert, topk,
                           quant='fp8_perTokenQuant', use_g1u1=True, activation='silu')
 
-for dtype in [torch.float16]:
-    for m in [64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
-        for dim in [6144]:
-            for inter_dim in [4096]:
-                expert, topk = 8, 2
-                test_fmoe(dtype, m, dim, inter_dim, expert, topk,
-                          quant='fp8_perTensorQuant', use_g1u1=True, activation='gelu')
+# for dtype in [torch.float16]:
+#     for m in [64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
+#         for dim in [6144]:
+#             for inter_dim in [4096]:
+#                 expert, topk = 8, 2
+#                 test_fmoe(dtype, m, dim, inter_dim, expert, topk,
+#                           quant='fp8_perTensorQuant', use_g1u1=True, activation='gelu')
