@@ -171,6 +171,35 @@ FMHA_BWD_API="""
 
 #define HSA_KERNEL "kernel_func"
 
+struct fmha_bwd_traits_all: public fmha_bwd_traits
+{{
+    fmha_bwd_traits_all(const mask_info &mask,
+        std::string dtype,
+        int head_size_q,
+        int head_size_v,
+        bool has_dropout,
+        bool enable_alibi,
+        bool deterministic,
+        bool use_ext_asm,
+        bool is_v3_atomic_fp32,
+        int how_v3_bf16_cvt): fmha_bwd_traits{{head_size_q,
+            head_size_v,
+            dtype,
+            false, // is_group_mode
+            mask.type,
+            enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
+            false,    // has_dbias
+            has_dropout,
+            false, // s_randval
+            deterministic}}, 
+            use_ext_asm(use_ext_asm),
+            is_v3_atomic_fp32(is_v3_atomic_fp32),
+            how_v3_bf16_cvt(how_v3_bf16_cvt) {{}}
+    bool use_ext_asm;
+    bool is_v3_atomic_fp32;
+    int how_v3_bf16_cvt;
+}};
+
 struct __attribute__((packed)) fmha_bwd_v3_args
 {{
     void* ptr_dq;
@@ -513,11 +542,11 @@ class fmha_bwd_v3_kernel
 {{
     public:
     fmha_bwd_v3_kernel(const char *name, const char *hsaco)
-    {
+    {{
         const char *AITER_ASM_DIR = std::getenv("AITER_ASM_DIR");
         HIP_CALL(hipModuleLoad(&module, (std::string(AITER_ASM_DIR) + "fmha_v3_bwd/" + hsaco).c_str()));
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, name));
-    }
+    }}
 
     void
     launch_kernel(fmha_bwd_v3_traits fmha_v3_traits, fmha_bwd_v3_args args, const ck_tile::stream_config& s) const
@@ -626,9 +655,9 @@ float fmha_bwd_(const ck_tile::stream_config& s, fmha_bwd_args a)
     if(s.log_level_ > 0)
         std::cout << ", " << fmha_bwd_dot_do_o_get_name_<dot_do_o_trait_>() << ", " << fmha_bwd_dq_dk_dv_get_name_<dq_dk_dv_trait_>() << ", " << fmha_bwd_convert_dq_get_name_<convert_dq_trait_>() << std::flush;
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dq_dk_dv_oneshot_<dq_dk_dv_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dq_dk_dv_oneshot_<dq_dk_dv_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
@@ -670,8 +699,8 @@ float fmha_bwd_v3_(const ck_tile::stream_config& s, fmha_bwd_args a)
                                       FmhaBwdV3Ts<dq_dk_dv_v3_traits_>::ts_kv}};
     static thread_local fmha_bwd_v3_kernel impl(HSA_KERNEL, FmhaBwdV3Buf<dq_dk_dv_v3_traits_>::bwd_v3_buf); // static here is for thread safety.
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
@@ -714,8 +743,8 @@ float fmha_bwd_v3_gen_(const ck_tile::stream_config& s, fmha_bwd_args a)
                                       FmhaBwdV3Ts<dq_dk_dv_v3_traits_>::ts_kv}};
     static thread_local fmha_bwd_v3_kernel impl(HSA_KERNEL, FmhaBwdV3Buf<dq_dk_dv_v3_traits_>::bwd_v3_buf); // static here is for thread safety.
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
@@ -757,9 +786,9 @@ float fmha_bwd_v3_(const ck_tile::stream_config& s, fmha_bwd_args a)
                                       FmhaBwdV3Ts<dq_dk_dv_v3_traits_>::ts_kv}};
     static thread_local fmha_bwd_v3_kernel impl(HSA_KERNEL, FmhaBwdV3Buf<dq_dk_dv_v3_traits_>::bwd_v3_buf); // static here is for thread safety.
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
@@ -802,9 +831,9 @@ float fmha_bwd_v3_gen_(const ck_tile::stream_config& s, fmha_bwd_args a)
                                       FmhaBwdV3Ts<dq_dk_dv_v3_traits_>::ts_kv}};
     static thread_local fmha_bwd_v3_kernel impl(HSA_KERNEL, FmhaBwdV3Buf<dq_dk_dv_v3_traits_>::bwd_v3_buf); // static here is for thread safety.
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
@@ -857,14 +886,13 @@ float fmha_bwd_v3_genl_(const ck_tile::stream_config& s, fmha_bwd_args a)
                                       FmhaBwdV3Ts<dq_dk_dv_v3_traits_>::ts_kv}};
     static thread_local fmha_bwd_v3_kernel impl(HSA_KERNEL, FmhaBwdV3Buf<dq_dk_dv_v3_traits_>::bwd_v3_buf); // static here is for thread safety.
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ impl.launch_kernel(traits, args, s_);  return hipPeekAtLastError() == hipSuccess; }},
+        [=](const ck_tile::stream_config& s_){{ fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);  return hipPeekAtLastError() == hipSuccess; }}
     );
 }}
 
-template <>
-float fmha_bwd<2>(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_config& s){{
+float fmha_bwd(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_config& s){{
     float r = -1;
 
     if (t.use_ext_asm == true){{
