@@ -9,24 +9,53 @@
 #include "fmha_bwd.hpp"
 #include "mask.hpp"
 
-fmha_bwd_traits get_ck_fmha_bwd_traits(const mask_info &mask,
+struct fmha_bwd_traits_all: public fmha_bwd_traits
+{
+    fmha_bwd_traits_all(const mask_info &mask,
+        std::string dtype,
+        int head_size,
+        bool has_dropout,
+        bool enable_alibi,
+        bool deterministic,
+        bool use_ext_asm,
+        bool is_v3_atomic_fp32,
+        int how_v3_bf16_cvt): fmha_bwd_traits{head_size,
+            head_size,
+            dtype,
+            false, // is_group_mode
+            mask.type,
+            enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
+            false,    // has_dbias
+            has_dropout,
+            false, // s_randval
+            deterministic}, 
+            use_ext_asm(use_ext_asm),
+            is_v3_atomic_fp32(is_v3_atomic_fp32),
+            how_v3_bf16_cvt(how_v3_bf16_cvt) {}
+    bool use_ext_asm;
+    bool is_v3_atomic_fp32;
+    int how_v3_bf16_cvt;
+};
+
+fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
                                        std::string dtype,
-                                       int head_size_q,
-                                       int head_size_v,
+                                       int head_size,
                                        bool has_dropout,
                                        bool enable_alibi,
-                                       bool deterministic)
+                                       bool deterministic,
+                                       bool use_ext_asm,
+                                       bool is_v3_atomic_fp32,
+                                       int how_v3_bf16_cvt)
 {
-    return fmha_bwd_traits{head_size_q,
-                           head_size_v,
-                           dtype,
-                           false, // is_group_mode
-                           mask.type,
-                           enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
-                           false,    // has_dbias
-                           has_dropout,
-                           false, // s_randval
-                           deterministic};
+    return fmha_bwd_traits_all(mask,
+                    dtype,
+                    head_size,
+                    has_dropout,
+                    enable_alibi,
+                    deterministic,
+                    use_ext_asm,
+                    is_v3_atomic_fp32,
+                    how_v3_bf16_cvt);
 }
 
 fmha_bwd_args get_ck_fmha_bwd_args(const mask_info &mask,
@@ -210,6 +239,9 @@ mha_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
         int window_size_left,
         int window_size_right,
         bool deterministic,
+        std::optional<bool> use_ext_asm,
+        std::optional<bool> is_v3_atomic_fp32,
+        std::optional<int> how_v3_bf16_cvt,
         std::optional<at::Tensor> dq_,
         std::optional<at::Tensor> dk_,
         std::optional<at::Tensor> dv_,
@@ -357,9 +389,10 @@ mha_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
         auto rng_state_ptr = reinterpret_cast<uint64_t*>(rng_state.data_ptr());
         auto drop_seed_offset = std::make_pair(rng_state_ptr, rng_state_ptr + 1);
         ck_tile::stream_config stream_config{stream};
+        stream_config.log_level = 1
 
         auto traits =
-            get_ck_fmha_bwd_traits(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, alibi_slopes_.has_value(), deterministic);
+            get_ck_fmha_bwd_traits(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, alibi_slopes_.has_value(), deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
 
         auto args =
             get_ck_fmha_bwd_args(

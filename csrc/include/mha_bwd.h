@@ -16,6 +16,9 @@ mha_bwd(const at::Tensor &dout, // [b, sq, hq, d]
         int window_size_left,
         int window_size_right,
         bool deterministic,
+        std::optional<bool> use_ext_asm,
+        std::optional<bool> is_v3_atomic_fp32,
+        std::optional<int> how_v3_bf16_cvt,
         std::optional<at::Tensor> dq,                 // [b, sq, hq, d]
         std::optional<at::Tensor> dk,                 // [b, sk, hk, d]
         std::optional<at::Tensor> dv,                 // [b, sk, hk, d]
