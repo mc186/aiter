@@ -10,7 +10,7 @@ import itertools
 from pathlib import Path
 from typing import List, Optional, Tuple
 import sys
-sys.path.append("/home/jimguo12/aiter/3rdparty/composable_kernel/example/ck_tile/01_fmha")
+sys.path.append("/workspace/aiter/3rdparty/composable_kernel/example/ck_tile/01_fmha")
 
 from codegen.cmake_config import *
 from codegen.cpp_symbol_map import *
@@ -409,54 +409,54 @@ template<> struct FmhaBwdV3Name<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,  
 
 template <typename fmha_bwd_dq_dk_dv_v3_traits_> struct FmhaBwdV3Buf;
 // #######################################################|HDim|    DataType|kIsCausal|kIsAtomic32|BF16Cvt|kIsSEQPad|kIsHDPad|
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_a16.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,       true,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_a32.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a16.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,       true,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a32.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      0,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtne_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      1,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtna_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      2,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtz_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      0,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtne_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      1,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtna_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      2,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtz_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      0,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtne_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      1,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtna_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      2,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtz_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      0,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtne_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      1,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtna_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      2,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtz_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,      false,      0,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_a16_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,       true,      0,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_a32_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,      false,      0,    false,    true>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a16_pddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,       true,      0,     true,    true>> { static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a32_psskddv.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      0,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtne_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      1,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtna_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      2,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtz_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtne.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      1,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtna.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      2,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtz.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      0,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtne_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      1,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtna_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      2,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtz_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,    false,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_a16.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,    false,       true,      0,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_a32_pssk.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,     true,      false,      0,    false,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_causal_a16.co"; };
-template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,     true,       true,      0,     true,   false>> { static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_causal_a32_pssk.co"; };
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_a16.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,       true,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_a32.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a16.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,       true,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a32.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      0,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtne_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      1,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtna_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,      false,      2,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a16_rtz_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      0,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtne_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      1,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtna_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,    false,       true,      2,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_a32_rtz_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      0,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtne_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      1,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtna_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,      false,      2,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a16_rtz_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      0,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtne_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      1,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtna_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdBf16,     true,       true,      2,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_bf16_causal_a32_rtz_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,      false,      0,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_a16_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,    false,       true,      0,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_a32_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,      false,      0,    false,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a16_pddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_<128, FmhaBwdFp16,     true,       true,      0,     true,    true>> {{ static constexpr const char * bwd_v3_buf = "bwd_fp16_causal_a32_psskddv.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,      false,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a16_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      0,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtne_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      1,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtna_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,    false,       true,      2,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_a32_rtz_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtne.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      1,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtna.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,      false,      2,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a16_rtz.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      0,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtne_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      1,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtna_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdBf16,     true,       true,      2,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_bf16_causal_a32_rtz_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,    false,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_a16.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,    false,       true,      0,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_a32_pssk.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,     true,      false,      0,    false,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_causal_a16.co"; }};
+template<> struct FmhaBwdV3Buf<fmha_bwd_dq_dk_dv_v3_traits_< 64, FmhaBwdFp16,     true,       true,      0,     true,   false>> {{ static constexpr const char * bwd_v3_buf = "bwd_hd64_fp16_causal_a32_pssk.co"; }};
 
 template <typename fmha_bwd_dq_dk_dv_v3_traits_> struct FmhaBwdV3Ts;
 // ######################################################|HDim|    DataType|kIsCausal|kIsAtomic32|BF16Cvt|kIsSEQPad|kIsHDPad|

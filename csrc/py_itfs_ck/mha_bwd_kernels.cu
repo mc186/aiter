@@ -395,7 +395,7 @@ mha_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
         stream_config.log_level_ = 1;
 
         auto traits =
-            get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, alibi_slopes_.has_value(), deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
+            get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, alibi_slopes_.has_value(), deterministic, use_ext_asm.has_value()? use_ext_asm.value(): false, is_v3_atomic_fp32.has_value()? is_v3_atomic_fp32.value(): false , how_v3_bf16_cvt.has_value()? how_v3_bf16_cvt.value(): 1);
 
         auto args =
             get_ck_fmha_bwd_args(
