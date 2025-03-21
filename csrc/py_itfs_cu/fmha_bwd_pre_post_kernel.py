@@ -1514,27 +1514,6 @@ float fmha_bwd_v3(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_
     return r;
 }
 
-fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
-                                       std::string dtype,
-                                       int head_size,
-                                       bool has_dropout,
-                                       bool enable_alibi,
-                                       bool deterministic,
-                                       bool use_ext_asm,
-                                       bool is_v3_atomic_fp32,
-                                       int how_v3_bf16_cvt)
-{
-    return fmha_bwd_traits_all(mask,
-                    dtype,
-                    head_size,
-                    has_dropout,
-                    enable_alibi,
-                    deterministic,
-                    use_ext_asm,
-                    is_v3_atomic_fp32,
-                    how_v3_bf16_cvt);
-}
-
 fmha_bwd_args get_ck_fmha_bwd_args(const mask_info &mask,
                                    // sizes
                                    const int b,

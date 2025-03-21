@@ -7,6 +7,55 @@
 
 #define HSA_KERNEL "kernel_func"
 
+struct fmha_bwd_traits_all: public fmha_bwd_traits
+{
+    fmha_bwd_traits_all(const mask_info &mask,
+        std::string dtype,
+        int head_size,
+        bool has_dropout,
+        bool enable_alibi,
+        bool deterministic,
+        bool use_ext_asm,
+        bool is_v3_atomic_fp32,
+        int how_v3_bf16_cvt): fmha_bwd_traits{head_size,
+            head_size,
+            dtype,
+            false, // is_group_mode
+            mask.type,
+            enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
+            false,    // has_dbias
+            has_dropout,
+            false, // s_randval
+            deterministic}, 
+            use_ext_asm(use_ext_asm),
+            is_v3_atomic_fp32(is_v3_atomic_fp32),
+            how_v3_bf16_cvt(how_v3_bf16_cvt) {}
+    bool use_ext_asm;
+    bool is_v3_atomic_fp32;
+    int how_v3_bf16_cvt;
+};
+
+fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
+    std::string dtype,
+    int head_size,
+    bool has_dropout,
+    bool enable_alibi,
+    bool deterministic,
+    bool use_ext_asm,
+    bool is_v3_atomic_fp32,
+    int how_v3_bf16_cvt)
+{
+return fmha_bwd_traits_all(mask,
+dtype,
+head_size,
+has_dropout,
+enable_alibi,
+deterministic,
+use_ext_asm,
+is_v3_atomic_fp32,
+how_v3_bf16_cvt);
+}
+
 struct __attribute__((packed)) fmha_bwd_v3_args
 {
     void* ptr_dq;
@@ -1450,84 +1499,24 @@ float fmha_bwd_v3(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_
     return r;
 }
 
-float fmha_bwd_aiter(const void* q_ptr,
-        const void* k_ptr,
-        const void* v_ptr,
-        const void* bias_ptr, // alibi slopes
-        const void* o_ptr,
-        const void* lse_ptr,
-        const void* do_ptr,
-        void* d_ptr,
-        // void* rand_val_ptr, nullptr
-        void* dq_ptr,
-        void* dk_ptr,
-        void* dv_ptr,
-        // void* dbias_ptr, // TODO: fix this
-        void* dq_acc_ptr,
-        const void* seqstart_q_ptr, // nullptr
-        const void* seqstart_k_ptr, // nullptr
-        const void* seqlen_k_ptr, // nullptr
-        ck_tile::index_t seqlen_q,
-        ck_tile::index_t seqlen_k,
-        ck_tile::index_t batch,
-        ck_tile::index_t max_seqlen_q,
-        ck_tile::index_t max_seqlen_k,
-        ck_tile::index_t hdim_q,
-        ck_tile::index_t hdim_v,
-        ck_tile::index_t nhead_q,
-        ck_tile::index_t nhead_k,
-        float scale, // softmax_scale
-        ck_tile::index_t stride_q,
-        ck_tile::index_t stride_k,
-        ck_tile::index_t stride_v,
-        ck_tile::index_t stride_bias, // if alibi, b*h need set this to h, 1*h need set this to 0
-        ck_tile::index_t stride_o,
-        // ck_tile::index_t stride_randval, 0
-        ck_tile::index_t stride_do,
-        ck_tile::index_t stride_dq_acc,
-        ck_tile::index_t stride_dq,
-        ck_tile::index_t stride_dk,
-        ck_tile::index_t stride_dv,
-        // ck_tile::index_t stride_dbias, // TODO: fix this
-        ck_tile::index_t nhead_stride_q,
-        ck_tile::index_t nhead_stride_k,
-        ck_tile::index_t nhead_stride_v,
-        // ck_tile::index_t nhead_stride_bias, // TODO: fix this
-        ck_tile::index_t nhead_stride_o,
-        // ck_tile::index_t nhead_stride_randval, 0
-        ck_tile::index_t nhead_stride_do,
-        ck_tile::index_t nhead_stride_lsed,
-        ck_tile::index_t nhead_stride_dq_acc,
-        ck_tile::index_t nhead_stride_dq,
-        ck_tile::index_t nhead_stride_dk,
-        ck_tile::index_t nhead_stride_dv,
-        // ck_tile::index_t nhead_stride_dbias, // TODO: fix this
-        ck_tile::index_t batch_stride_q,
-        ck_tile::index_t batch_stride_k,
-        ck_tile::index_t batch_stride_v,
-        // ck_tile::index_t batch_stride_bias, // TODO: fix this
-        ck_tile::index_t batch_stride_o,
-        // ck_tile::index_t batch_stride_randval, 0
-        ck_tile::index_t batch_stride_do,
-        ck_tile::index_t batch_stride_lsed,
-        ck_tile::index_t batch_stride_dq_acc,
-        ck_tile::index_t batch_stride_dq,
-        ck_tile::index_t batch_stride_dk,
-        ck_tile::index_t batch_stride_dv,
-        // ck_tile::index_t batch_stride_dbias, TODO: fix this
-        ck_tile::index_t split_stride_dq_acc,
-        float p_drop,
-        // float p_undrop, // calculate here
-        std::variant<std::pair<uint64_t, uint64_t>, std::pair<const void*, const void*>> drop_seed_offset,
+float fmha_bwd_aiter(fmha_bwd_args args,
         mask_info mask,
         std::string q_dtype_str,
-        // int head_size_q,  // hdim_q
-        // int head_size_v,  // hdim_v
-        // bool is_dropout, // calculate here
         bool enable_alibi,
         bool deterministic,
+        bool use_ext_asm,
         bool is_v3_atomic_fp32,
         int how_v3_bf16_cvt)
 {
+    int head_size_q = args.hdim_q;
+    int head_size_v = args.hdim_v;
+    bool is_dropout = args.p_drop > 0;
+    bool enable_ailib = args.alibi_slopes_ptr == nullptr;
+    ck_tile::stream_config stream_config{stream};
+    // use this to print kernel
+    stream_config.log_level_ = 1;
+    auto traits = get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, enable_ailib, deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
+    if (use_ext_asm) {
 
+    }
 }
