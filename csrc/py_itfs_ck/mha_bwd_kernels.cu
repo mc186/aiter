@@ -9,26 +9,6 @@
 #include "fmha_bwd.hpp"
 #include "mask.hpp"
 
-fmha_bwd_traits get_ck_fmha_bwd_traits(const mask_info &mask,
-                                       std::string dtype,
-                                       int head_size_q,
-                                       int head_size_v,
-                                       bool has_dropout,
-                                       bool enable_alibi,
-                                       bool deterministic)
-{
-    return fmha_bwd_traits{head_size_q,
-                           head_size_v,
-                           dtype,
-                           false, // is_group_mode
-                           mask.type,
-                           enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
-                           false,    // has_dbias
-                           has_dropout,
-                           false, // s_randval
-                           deterministic};
-}
-
 fmha_bwd_args get_ck_fmha_bwd_args(const mask_info &mask,
                                    // sizes
                                    const int b,

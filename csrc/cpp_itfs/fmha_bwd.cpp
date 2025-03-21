@@ -46,14 +46,14 @@ fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
     int how_v3_bf16_cvt)
 {
 return fmha_bwd_traits_all(mask,
-dtype,
-head_size,
-has_dropout,
-enable_alibi,
-deterministic,
-use_ext_asm,
-is_v3_atomic_fp32,
-how_v3_bf16_cvt);
+        dtype,
+        head_size,
+        has_dropout,
+        enable_alibi,
+        deterministic,
+        use_ext_asm,
+        is_v3_atomic_fp32,
+        how_v3_bf16_cvt);
 }
 
 struct __attribute__((packed)) fmha_bwd_v3_args
@@ -1517,6 +1517,8 @@ float fmha_bwd_aiter(fmha_bwd_args args,
     stream_config.log_level_ = 1;
     auto traits = get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, enable_ailib, deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
     if (use_ext_asm) {
-
+        // call v3 api
+    } else {
+        // call v2 api
     }
 }
