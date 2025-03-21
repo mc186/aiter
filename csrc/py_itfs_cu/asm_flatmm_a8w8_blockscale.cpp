@@ -50,7 +50,7 @@ torch::Tensor flatmm_a8w8_blockscale_asm(
 
     TORCH_CHECK(out.dtype() == torch::ScalarType::Half,
                 "flatmm a8w8 blockscale asm only support Half output now!");
-    TORCH_CHECK(m % TileM == 0 && n % TileN == 0 && k % TileK == 0, 
+    TORCH_CHECK(n % TileN == 0 && k % TileK == 0,
                 "flatmm a8w8 blockscale asm only suuport 128x256x128 tile now!");
 
     KernelArgs args;
