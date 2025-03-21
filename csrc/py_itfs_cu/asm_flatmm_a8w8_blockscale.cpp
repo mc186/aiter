@@ -75,8 +75,8 @@ torch::Tensor flatmm_a8w8_blockscale_asm(
     static AiterAsmKernel impl_kenrel("flatmm_uk_gfx9_f16f8_128x256x128_1x4x1_16x16x32", "flatmm_uk_gfx9_f16f8_128x256x128_1x4x1_16x16x32.co");
     impl_ptr = &impl_kenrel;
 
-    int gdx = n / TileN;
-    int gdy = m / TileM;
+    int gdx = (n + TileN - 1) / TileN;
+    int gdy = (m + TileM - 1) / TileM;
 
     impl_ptr->launch_kernel({&args,
                              &arg_size,
