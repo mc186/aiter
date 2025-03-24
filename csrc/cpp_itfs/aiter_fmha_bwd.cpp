@@ -1,5 +1,5 @@
 #include <iostream>
-#include "fmha_bwd.h"
+#include "aiter_fmha_bwd.h"
 
 fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
     std::string dtype,

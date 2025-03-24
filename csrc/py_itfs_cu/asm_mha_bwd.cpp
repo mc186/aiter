@@ -81,6 +81,7 @@ fmha_bwd_args get_ck_fmha_bwd_args(const mask_info &mask,
     ck_tile::index_t stride_dv = dv.stride(1);
     ck_tile::index_t nhead_stride_dv = dv.stride(2);
 
+    // TODO: if dq_acc layout do no harm to performance consider reuse this api
     // dq_acc: (split, batch_size, nheads, seqlen_q, hdim_q)
     ck_tile::index_t split_stride_dq_acc = dq_acc.stride(0);
     ck_tile::index_t batch_stride_dq_acc = dq_acc.stride(1);
