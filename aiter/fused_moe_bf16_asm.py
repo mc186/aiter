@@ -29,7 +29,7 @@ def moe_sorting_ck(topk_ids, topk_weights, num_experts, model_dim, moebuf_dtype,
     sorted_expert_ids = torch.empty((max_num_m_blocks, ),
                                     dtype=torch.int32,
                                     device=device)
-    num_valid_ids = torch.empty((1),
+    num_valid_ids = torch.empty((1 + num_experts + 12),
                                 dtype=torch.int32,
                                 device=device)
     moe_buf = torch.empty((M, model_dim),
@@ -254,35 +254,35 @@ def ck_moe_2stages(a1,
                         fc1_scale, a1_scale, block_size)
 
     # g1u0
-    if w2.shape[2] == w1.shape[1]:
-        if activation == ActivationType.Gelu:
-            a2 = F.gelu(a2)
-        else:
-            a2 = F.silu(a2)
-    # g1u1
-    else:
-        tmp = torch.empty((M, topk, inter_dim), dtype=dtype, device=device)
-        if activation == ActivationType.Gelu:
-            aiter.gelu_and_mul(tmp, a2)
-        else:
-            aiter.silu_and_mul(tmp, a2)
-        a2 = tmp
-    if w2.dtype == torch.float8_e4m3fnuz:
-        if quantType == "per_tensor":
-            a2, a2_scale = aiter.per_tensor_quant_fp8_hip(a2, a2_scale)
-        elif quantType == "per_token":
-            a2_qt, a2_scale = aiter.per_token_dynamic_quant_fp8_hip(a2.view(M, -1))
-            # a2_qt, a2_scale = aiter.pertoken_quant(a2.view(M, -1),  quant_dtype=torch.float8_e4m3fnuz)
-            a2 = a2_qt.view(M, topk, -1)
-    else:
-        if not hasattr(ck_moe_2stages, "one_float_tensor"):
-            ck_moe_2stages.one_float_tensor = torch.tensor(
-                1.0, dtype=torch.float, device=device)
-        a2_scale = ck_moe_2stages.one_float_tensor
+    # if w2.shape[2] == w1.shape[1]:
+    #     if activation == ActivationType.Gelu:
+    #         a2 = F.gelu(a2)
+    #     else:
+    #         a2 = F.silu(a2)
+    # # g1u1
+    # else:
+    #     tmp = torch.empty((M, topk, inter_dim), dtype=dtype, device=device)
+    #     if activation == ActivationType.Gelu:
+    #         aiter.gelu_and_mul(tmp, a2)
+    #     else:
+    #         aiter.silu_and_mul(tmp, a2)
+    #     a2 = tmp
+    # if w2.dtype == torch.float8_e4m3fnuz:
+    #     if quantType == "per_tensor":
+    #         a2, a2_scale = aiter.per_tensor_quant_fp8_hip(a2, a2_scale)
+    #     elif quantType == "per_token":
+    #         a2_qt, a2_scale = aiter.per_token_dynamic_quant_fp8_hip(a2.view(M, -1))
+    #         # a2_qt, a2_scale = aiter.pertoken_quant(a2.view(M, -1),  quant_dtype=torch.float8_e4m3fnuz)
+    #         a2 = a2_qt.view(M, topk, -1)
+    # else:
+    #     if not hasattr(ck_moe_2stages, "one_float_tensor"):
+    #         ck_moe_2stages.one_float_tensor = torch.tensor(
+    #             1.0, dtype=torch.float, device=device)
+    #     a2_scale = ck_moe_2stages.one_float_tensor
 
-    aiter.ck_moe_stage2(a2, w1, w2, sorted_ids,
-                        sorted_expert_ids, sorted_weights,
-                        num_valid_ids, moe_buf, topk, fc2_scale, a2_scale, block_size)
+    # aiter.ck_moe_stage2(a2, w1, w2, sorted_ids,
+    #                     sorted_expert_ids, sorted_weights,
+    #                     num_valid_ids, moe_buf, topk, fc2_scale, a2_scale, block_size)
 
     return moe_buf
 

@@ -43,7 +43,7 @@ void ck_moe_stage1_gemm(const hipStream_t &stream, int tokens, int sorted_size, 
     // static constexpr ck::index_t MPerBlock = 128;
     static constexpr ck::index_t MNPerXDL = 32;
     static constexpr ck::index_t BLOCKSIZE = 256;
-    static constexpr ck::index_t NPerBlock = 128;
+    static constexpr ck::index_t NPerBlock = 64;
     static constexpr ck::index_t WAVES = BLOCKSIZE / 64;
     // static constexpr ck::index_t MWaves = 1;
     // static constexpr ck::index_t NWaves = WAVES / MWaves;
@@ -299,17 +299,17 @@ void ck_moe_stage2_gemm(const hipStream_t &stream, int tokens, int sorted_size, 
 }
 
 #define CK_MOE_STAGE2_GEMM_DEFINE(MPerfBlock, KPerBlock, MWaves, NWaves)                                                                                             \
-    template void ck_moe_stage2_gemm<A0DataType, B0DataType, AccDataType, EDataType, CDEElementOp, MPerfBlock, KPerBlock, MWaves, NWaves, Nswizzle, PerTensorQuant>( \
-        const hipStream_t &stream,                                                                                                                                   \
-        int tokens, int sorted_size, int N, int K,                                                                                                                   \
-        int topk,                                                                                                                                                    \
-        void *&inter_states,                                                                                                                                         \
-        void *&w1,                                                                                                                                                   \
-        void *&w2,                                                                                                                                                   \
-        void *&sorted_token_ids,                                                                                                                                     \
-        void *&sorted_expert_ids,                                                                                                                                    \
-        void *&sorted_weights,                                                                                                                                       \
-        void *&num_valid_ids,                                                                                                                                        \
-        void *&out,                                                                                                                                                  \
-        std::optional<void *> w2_scale,                                                                                                                              \
-        std::optional<void *> a2_scale);
+    // template void ck_moe_stage2_gemm<A0DataType, B0DataType, AccDataType, EDataType, CDEElementOp, MPerfBlock, KPerBlock, MWaves, NWaves, Nswizzle, PerTensorQuant>( \
+    //     const hipStream_t &stream,                                                                                                                                   \
+    //     int tokens, int sorted_size, int N, int K,                                                                                                                   \
+    //     int topk,                                                                                                                                                    \
+    //     void *&inter_states,                                                                                                                                         \
+    //     void *&w1,                                                                                                                                                   \
+    //     void *&w2,                                                                                                                                                   \
+    //     void *&sorted_token_ids,                                                                                                                                     \
+    //     void *&sorted_expert_ids,                                                                                                                                    \
+    //     void *&sorted_weights,                                                                                                                                       \
+    //     void *&num_valid_ids,                                                                                                                                        \
+    //     void *&out,                                                                                                                                                  \
+    //     std::optional<void *> w2_scale,                                                                                                                              \
+    //     std::optional<void *> a2_scale);
