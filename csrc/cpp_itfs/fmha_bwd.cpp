@@ -1472,5 +1472,5 @@ float fmha_bwd_aiter(fmha_bwd_args args,
         // call v2 api
         t = fmha_bwd(traits, args, stream_config);
     }
-    
+    return r;
 }
