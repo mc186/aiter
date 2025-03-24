@@ -30,6 +30,8 @@ struct fmha_bwd_traits_all: public fmha_bwd_traits
     int how_v3_bf16_cvt;
 };
 
+float fmha_bwd_v3(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_config& s);
+
 float fmha_bwd_aiter(fmha_bwd_args args,
     const ck_tile::stream_config& stream_config,
     mask_info mask,
