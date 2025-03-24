@@ -364,7 +364,7 @@ mha_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
                 p_dropout,
                 drop_seed_offset);
 
-        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), deterministic, false, false, 0);
+        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), deterministic);
         TORCH_CHECK(t >= 0, "invalid argument for fmha_bwd");
     } else {
         // If seqlen_q == 0, then we have an empty tensor. We need to set the output to 0.
