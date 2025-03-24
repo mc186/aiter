@@ -65,7 +65,7 @@ def write_blobs(output_dir: Optional[str], receipt) -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fmha_bwd_api_name = "fmha_bwd" if receipt == 100 else "fmha_bwd_v3"
+    fmha_bwd_api_name = "fmha_bwd" if receipt == 1 else "fmha_bwd_v3"
     api = AITER_CPP_API.format(F_fmha_bwd_api = fmha_bwd_api_name)
     (output_dir / AITER_API_FILENAME).write_text(api)
 

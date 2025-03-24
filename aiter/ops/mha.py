@@ -267,8 +267,9 @@ def _flash_attn_backward(
 
     filter = f'{filter1}@{filter2}@{filter3}'
 
-    blob_gen_cmd = f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d bwd ' \
-        '--receipt 300 --filter {} --output_dir {{}}'.format(filter)
+    blob_gen_cmd = [f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d bwd ' \
+        '--receipt 300 --filter {} --output_dir {{}}'.format(filter),
+        f'{AITER_CSRC_DIR}/cpp_itfs/generate.py --receipt 1 --output_dir {{}}']
 
     (_, seqlen_q, nhead_q, hdim_q) = q.shape
     (_, seqlen_k, nhead_k, hdim_v) = v.shape

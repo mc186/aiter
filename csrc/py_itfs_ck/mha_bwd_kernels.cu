@@ -6,7 +6,7 @@
 #include "py_itfs_common.h"
 #include "mha_common.h"
 
-#include "fmha_bwd.h"
+#include "aiter_fmha_bwd.h"
 
 fmha_bwd_args get_ck_fmha_bwd_args(const mask_info &mask,
                                    // sizes
@@ -364,7 +364,7 @@ mha_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
                 p_dropout,
                 drop_seed_offset);
 
-        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), deterministic);
+        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), deterministic, false, false, 0);
         TORCH_CHECK(t >= 0, "invalid argument for fmha_bwd");
     } else {
         // If seqlen_q == 0, then we have an empty tensor. We need to set the output to 0.
