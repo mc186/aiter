@@ -5,14 +5,15 @@ struct fmha_bwd_traits_all: public fmha_bwd_traits
 {
     fmha_bwd_traits_all(const mask_info &mask,
         std::string dtype,
-        int head_size,
+        int head_size_q,
+        int head_size_v,
         bool has_dropout,
         bool enable_alibi,
         bool deterministic,
         bool use_ext_asm,
         bool is_v3_atomic_fp32,
-        int how_v3_bf16_cvt): fmha_bwd_traits{head_size,
-            head_size,
+        int how_v3_bf16_cvt): fmha_bwd_traits{head_size_q,
+            head_size_v,
             dtype,
             false, // is_group_mode
             mask.type,
@@ -31,7 +32,8 @@ struct fmha_bwd_traits_all: public fmha_bwd_traits
 
 fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
     std::string dtype,
-    int head_size,
+    int head_size_q,
+    int head_size_v,
     bool has_dropout,
     bool enable_alibi,
     bool deterministic,
@@ -39,15 +41,16 @@ fmha_bwd_traits_all get_ck_fmha_bwd_traits_all(const mask_info &mask,
     bool is_v3_atomic_fp32,
     int how_v3_bf16_cvt)
 {
-return fmha_bwd_traits_all(mask,
-        dtype,
-        head_size,
-        has_dropout,
-        enable_alibi,
-        deterministic,
-        use_ext_asm,
-        is_v3_atomic_fp32,
-        how_v3_bf16_cvt);
+    return fmha_bwd_traits_all(mask,
+            dtype,
+            head_size_q,
+            head_size_v,
+            has_dropout,
+            enable_alibi,
+            deterministic,
+            use_ext_asm,
+            is_v3_atomic_fp32,
+            how_v3_bf16_cvt);
 }
 
 float fmha_bwd_aiter(fmha_bwd_args args,
@@ -57,4 +60,4 @@ float fmha_bwd_aiter(fmha_bwd_args args,
     bool deterministic,
     bool use_ext_asm,
     bool is_v3_atomic_fp32,
-    int how_v3_bf16_cvt)
+    int how_v3_bf16_cvt);

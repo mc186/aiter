@@ -1450,6 +1450,7 @@ float fmha_bwd_v3(fmha_bwd_traits_all t, fmha_bwd_args a, const ck_tile::stream_
 }
 
 float fmha_bwd_aiter(fmha_bwd_args args,
+        const ck_tile::stream_config& stream_config,
         mask_info mask,
         std::string q_dtype_str,
         bool enable_alibi,
@@ -1461,14 +1462,15 @@ float fmha_bwd_aiter(fmha_bwd_args args,
     int head_size_q = args.hdim_q;
     int head_size_v = args.hdim_v;
     bool is_dropout = args.p_drop > 0;
-    bool enable_ailib = args.alibi_slopes_ptr == nullptr;
-    ck_tile::stream_config stream_config{stream};
-    // use this to print kernel
-    stream_config.log_level_ = 1;
-    auto traits = get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, enable_ailib, deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
+    // bool enable_ailib = args.alibi_slopes_ptr == nullptr;
+    auto traits = get_ck_fmha_bwd_traits_all(mask, q_dtype_str, head_size_q, head_size_v, is_dropout, enable_alibi, deterministic, use_ext_asm, is_v3_atomic_fp32, how_v3_bf16_cvt);
+    float t = -1;
     if (use_ext_asm) {
         // call v3 api
+        t = fmha_bwd_v3(traits, args, stream_config);
     } else {
         // call v2 api
+        t = fmha_bwd(traits, args, stream_config);
     }
+    
 }
