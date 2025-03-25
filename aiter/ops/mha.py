@@ -124,6 +124,35 @@ def mha_varlen_bwd(
     custom_build_args:Optional[dict]=None,
 ): ...
 
+@compile_ops("module_fmha_v3_varlen_bwd", fc_name="fmha_v3_varlen_bwd")
+def fmha_v3_varlen_bwd(
+    dout: Tensor,
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    out: Tensor,
+    softmax_lse: Tensor,
+    cu_seqlens_q: Tensor,
+    cu_seqlens_k: Tensor,
+    max_seqlen_q: int,
+    max_seqlen_k: int,
+    dropout_p: float,
+    softmax_scale: float,
+    zero_tensors: bool,
+    is_causal: bool,
+    window_size_left: int,
+    window_size_right: int,
+    deterministic: bool,
+    is_v3_atomic_fp32: bool,
+    how_v3_bf16_cvt: int,
+    dq: Optional[Tensor] = None,
+    dk: Optional[Tensor] = None,
+    dv: Optional[Tensor] = None,
+    alibi_slopes: Optional[Tensor] = None,
+    rng_state: Optional[Tensor] = None,
+    gen: Optional[Generator] = None,
+): ...
+
 
 def maybe_contiguous(x):
     return x.contiguous() if x is not None and x.stride(-1) != 1 else x
@@ -811,6 +840,8 @@ def _flash_attn_varlen_backward(
     deterministic: bool,
     rng_state: Optional[torch.Tensor] = None,
     zero_tensors: bool = False,
+    is_v3_atomic_fp32: Optional[bool] = True,
+    how_v3_bf16_cvt: Optional[int] = 1
 ) -> torch.Tensor:
     md_name = 'mha_varlen_bwd'
     filter1 = '*'   # get_bwd_dot_do_o_blobs()
@@ -854,42 +885,119 @@ def _flash_attn_varlen_backward(
         filter3 += '_ndeterministic*'
     filter = f'{filter1}@{filter2}@{filter3}'
 
-    blob_gen_cmd = f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d bwd ' \
-        '--receipt 400 --filter {} --output_dir {{}}'.format(filter)
+    blob_gen_cmd = [f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d bwd ' \
+        '--receipt 400 --filter {} --output_dir {{}}'.format(filter),
+        f'{AITER_CSRC_DIR}/cpp_itfs/generate.py --receipt 1 --output_dir {{}}']
+
+    (_, seqlen_q, nhead_q, hdim_q) = q.shape
+    (_, seqlen_k, nhead_k, hdim_v) = v.shape
+
+    # mask
+    window_size_left = -1 if window_size_left >= seqlen_k else window_size_left
+    window_size_right = -1 if window_size_right >= seqlen_k else window_size_right
+    mask = (causal == True and window_size_left == -1) # causal mask
+    nmask = (causal == False and window_size_left == -1 and window_size_right == -1) # no mask
+
+    def pssk():
+        # only for hd64 a32 causal/no causal, fp16/bf16-rtne/rtna/rtz cases
+        # nhead_stride_dq_acc >= stride_dq_acc must be guaranteed
+        # bwd_v3_hd64_bf16_a32_rtne_pssk_group
+        # bwd_v3_hd64_bf16_a32_rtna_pssk_group
+        # bwd_v3_hd64_bf16_a32_rtz_pssk_group
+        # bwd_v3_hd64_bf16_causal_a32_rtne_pssk_group
+        # bwd_v3_hd64_bf16_causal_a32_rtna_pssk_group
+        # bwd_v3_hd64_bf16_causal_a32_rtz_pssk_group
+        # bwd_v3_hd64_fp16_a32_pssk_group
+        # bwd_v3_hd64_fp16_causal_a32_pssk_group
+        ret = is_v3_atomic_fp32 == True
+        ret &= hdim_q == 64
+        ret &= nmask or (mask and seqlen_q == seqlen_k) # TODO: or (seqlen_q != seqlen_k and mask_type == top_left)
+
+        return ret
+
+    def can_impl_fmha_v3_bwd():
+        # basic
+        ret = alibi_slopes is None
+        ret &= dropout_p == 0.0
+        ret &= deterministic == False
+        ret &= hdim_q == hdim_v
+        ret &= nhead_q % nhead_k == 0
+        ret &= hdim_q >= 64 and hdim_q <= 128 and hdim_q % 8 == 0
+        ret &= mask or nmask
+        ret &= pssk()
+        # TODO: enable this when GPU_ARCH distinguishable
+        # fmha v3 backward ASM kernel only support gfx942
+        # archs = validate_and_update_archs()
+        # ret &= archs == ["gfx942"]
+        return ret
 
     # dq, dk, dv are allocated by us so they should already be contiguous
     dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
-    (
-        dq,
-        dk,
-        dv,
-        softmax_d,
-    ) = mha_varlen_bwd(
-        dout,
-        q,
-        k,
-        v,
-        out,
-        softmax_lse,
-        cu_seqlens_q,
-        cu_seqlens_k,
-        max_seqlen_q,
-        max_seqlen_k,
-        dropout_p,
-        softmax_scale,
-        zero_tensors,
-        causal,
-        window_size_left,
-        window_size_right,
-        deterministic,
-        dq,
-        dk,
-        dv,
-        alibi_slopes,
-        rng_state,
-        None,
-        custom_build_args={'md_name': md_name, 'blob_gen_cmd': blob_gen_cmd}
-    )
+    if can_impl_fmha_v3_bwd():
+        (
+            dq,
+            dk,
+            dv,
+            softmax_d,
+        ) = fmha_v3_varlen_bwd(
+            dout,
+            q,
+            k,
+            v,
+            out,
+            softmax_lse,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            max_seqlen_q,
+            max_seqlen_k,
+            dropout_p,
+            softmax_scale,
+            zero_tensors,
+            causal,
+            window_size_left,
+            window_size_right,
+            deterministic,
+            is_v3_atomic_fp32,
+            how_v3_bf16_cvt,
+            dq,
+            dk,
+            dv,
+            alibi_slopes,
+            rng_state,
+            None
+        )
+    else:
+        (
+            dq,
+            dk,
+            dv,
+            softmax_d,
+        ) = mha_varlen_bwd(
+            dout,
+            q,
+            k,
+            v,
+            out,
+            softmax_lse,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            max_seqlen_q,
+            max_seqlen_k,
+            dropout_p,
+            softmax_scale,
+            zero_tensors,
+            causal,
+            window_size_left,
+            window_size_right,
+            deterministic,
+            dq,
+            dk,
+            dv,
+            alibi_slopes,
+            rng_state,
+            None,
+            custom_build_args={'md_name': md_name, 'blob_gen_cmd': blob_gen_cmd}
+        )
     return softmax_d
 
 

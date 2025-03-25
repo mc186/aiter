@@ -184,6 +184,7 @@ fmha_v3_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
     const at::Tensor &v,            // [b, sk, hk, d_v]
     const at::Tensor &out,          // [b, sq, hq, d_v]
     const at::Tensor &softmax_lse,  // [b, hq, sq]
+    std::optional<
     float p_dropout,
     float softmax_scale,
     bool is_causal,
@@ -343,31 +344,31 @@ fmha_v3_bwd(const at::Tensor &dout,         // [b, sq, hq, d_v]
 
         auto args =
         get_ck_fmha_bwd_args(
-            mask,
-            batch_size,
-            seqlen_q,
-            seqlen_k,
-            num_heads,
-            num_heads_k,
-            head_size_q,
-            head_size_v,
-            q,
-            k,
-            v,
-            alibi_slopes_,
-            out,
-            softmax_lse,
-            dout,
-            dq_accum,
-            softmax_d,
-            dq,
-            dk_expanded,
-            dv_expanded,
-            softmax_scale,
-            p_dropout,
-            drop_seed_offset);
+                mask,
+                batch_size,
+                seqlen_q,
+                seqlen_k,
+                num_heads,
+                num_heads_k,
+                head_size_q,
+                head_size_v,
+                q,
+                k,
+                v,
+                alibi_slopes_,
+                out,
+                softmax_lse,
+                dout,
+                dq_accum,
+                softmax_d,
+                dq,
+                dk_expanded,
+                dv_expanded,
+                softmax_scale,
+                p_dropout,
+                drop_seed_offset);
 
-        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), deterministic, true, is_v3_atomic_fp32, how_v3_bf16_cvt);
+        float t = fmha_bwd_aiter(args, stream_config, mask, q_dtype_str, alibi_slopes_.has_value(), false, deterministic, true, is_v3_atomic_fp32, how_v3_bf16_cvt);
         TORCH_CHECK(t >= 0, "invalid argument for fmha_bwd");
     } else {
         // If seqlen_q == 0, then we have an empty tensor. We need to set the output to 0.
