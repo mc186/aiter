@@ -366,11 +366,16 @@ def test_fmoe(
         topk,
         BLOCK_SIZE_M,
     )
-    # checkAllclose(
-    #     out1_ref,
-    #     out1_asm,
-    #     msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
-    # )
+    checkAllclose(
+        out1_ref,
+        out1_asm,
+        msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    )
+    checkAllclose(
+        out1_ref,
+        out1_ck,
+        msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    )
 
     logger.info(
         f"[perf] token:{token} ck_moe_stage1:{us1:.2f} us, asm_moe_stage1:{us2:.2f} us, ratio:{us2/us1:.2f})",
