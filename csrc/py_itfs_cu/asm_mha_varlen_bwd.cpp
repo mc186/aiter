@@ -395,15 +395,15 @@ fmha_v3_varlen_bwd(const at::Tensor &dout,         // [total_q, hq, d_v]
                 drop_seed_offset);
 
         float t = fmha_bwd_aiter(args,
-            stream_config,
-            mask,
-            q_dtype_str,
-            true,  //is_group_mode
-            alibi_slopes_.has_value(),
-            deterministic,
-            true,  // use_ext_asm
-            is_v3_atomic_fp32,
-            how_v3_bf16_cvt);
+                stream_config,
+                mask,
+                q_dtype_str,
+                true,  //is_group_mode
+                alibi_slopes_.has_value(),
+                deterministic,
+                true,  // use_ext_asm
+                is_v3_atomic_fp32,
+                how_v3_bf16_cvt);
         TORCH_CHECK(t >= 0, "invalid argument for fmha_bwd");
     } else {
         // If seqlen_q == 0, then we have an empty tensor. We need to set the output to 0.
