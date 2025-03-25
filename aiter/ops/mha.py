@@ -839,9 +839,9 @@ def _flash_attn_varlen_backward(
     alibi_slopes: Optional[torch.Tensor],
     deterministic: bool,
     rng_state: Optional[torch.Tensor] = None,
-    zero_tensors: bool = False,
     is_v3_atomic_fp32: Optional[bool] = True,
-    how_v3_bf16_cvt: Optional[int] = 1
+    how_v3_bf16_cvt: Optional[int] = 1,
+    zero_tensors: bool = False
 ) -> torch.Tensor:
     md_name = 'mha_varlen_bwd'
     filter1 = '*'   # get_bwd_dot_do_o_blobs()
@@ -1022,6 +1022,8 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
         return_softmax,
         block_table,
         is_grad_enabled,
+        is_v3_atomic_fp32: Optional[bool] = True,
+        how_v3_bf16_cvt: Optional[int] = 1
     ):
         is_grad = is_grad_enabled and any(
             x.requires_grad for x in [q, k, v]
@@ -1066,6 +1068,8 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
             ctx.alibi_slopes = alibi_slopes
             ctx.deterministic = deterministic
             ctx.head_size_q_og = head_size_q_og
+            ctx.is_v3_atomic_fp32 = is_v3_atomic_fp32
+            ctx.how_v3_bf16_cvt = how_v3_bf16_cvt
 
         out = out_padded[..., :head_size_v_og]
 
@@ -1108,6 +1112,8 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
             ctx.alibi_slopes,
             ctx.deterministic,
             rng_state=rng_state,
+            is_v3_atomic_fp32=ctx.is_v3_atomic_fp32,
+            how_v3_bf16_cvt=ctx.how_v3_bf16_cvt
         )
         dq = dq[..., : head_size_q_og]  # We could have padded the head dimension
         dk = dk[..., : head_size_q_og]
