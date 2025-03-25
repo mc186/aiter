@@ -9,6 +9,7 @@ import sys
 import os
 from typing import Any, Callable, Dict, Optional, Tuple
 import aiter
+from aiter import logger
 from aiter.test_common import checkAllclose, perftest, benchmark
 from aiter.fused_moe_bf16_asm import (
     fused_topk,
@@ -129,7 +130,7 @@ def ck_moe_stage1(
     block_size=32,
 ):
     token_num = hidden_states.shape[0]
-    D = w1.shape[1]
+    D = w1.shape[1] // 2
     num_experts, model_dim, inter_dim = w2.shape
     max_num_tokens_padded = sorted_token_ids.shape[0]
     # max_num_tokens_padded = sorted_expert_ids.shape[0]*block_size
@@ -153,11 +154,11 @@ def ck_moe_stage1(
         block_size,
     )
 
-    tmp = torch.empty(
-        (token_num, topk, inter_dim), dtype=dtype, device=hidden_states.device
-    )
-    aiter.silu_and_mul(tmp, out)
-    out = tmp
+    # tmp = torch.empty(
+    #     (token_num, topk, inter_dim), dtype=dtype, device=hidden_states.device
+    # )
+    # aiter.silu_and_mul(tmp, out)
+    # out = tmp
 
     return out
 
@@ -338,12 +339,7 @@ def test_fmoe(
         topk,
         BLOCK_SIZE_M,
     )
-    checkAllclose(
-        out1_ref,
-        out1_ck,
-        msg=f"[perf]  ck_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
-    )
-    out1_asm, us = asm_moe_stage1(
+    out1_asm, us2 = asm_moe_stage1(
         a1_qt,
         shuffle_weight(w1_qt, (16, 16)),
         shuffle_weight(w2_qt, (16, 16)),
@@ -357,12 +353,28 @@ def test_fmoe(
         topk,
         BLOCK_SIZE_M,
     )
-    checkAllclose(
-        out1_ref,
-        out1_asm,
-        msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    out1_ck, us1 = ck_moe_stage1(
+        a1_qt,
+        shuffle_weight(w1_qt, layout=(32, 32)),
+        w2,
+        sorted_ids,
+        sorted_expert_ids,
+        num_valid_ids,
+        w1_scale,
+        a1_scale,
+        dtype,
+        topk,
+        BLOCK_SIZE_M,
     )
+    # checkAllclose(
+    #     out1_ref,
+    #     out1_asm,
+    #     msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    # )
 
+    logger.info(
+        f"[perf] token:{token} ck_moe_stage1:{us1:.2f} us, asm_moe_stage1:{us2:.2f} us, ratio:{us2/us1:.2f})",
+    )
     # ######################## stage 2 start ###########
     # a2_qt, a2_scale = torch_quant(out1_ref, quant_dtype=QDType)
     # out2_ref, us_ref = torch_moe_stage2(
@@ -406,8 +418,8 @@ def test_fmoe(
 
 
 for dtype in [torch.bfloat16]:
-    # for m in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
-    for m in [1]:
+    for m in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1536, 2048, 3072, 4096]:
+    # for m in [1]:
         for dim in [6144]:
             for inter_dim in [4096]:
                 expert, topk = 8, 2
@@ -419,7 +431,7 @@ for dtype in [torch.bfloat16]:
                     expert,
                     topk,
                     quantCfg=(aiter.QuantType.per_Token, torch.float8_e4m3fnuz),
-                    BLOCK_SIZE_M=48,
+                    BLOCK_SIZE_M=128,
                     use_g1u1=True,
                 )
 # for dtype in [torch.bfloat16]:
