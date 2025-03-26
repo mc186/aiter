@@ -109,7 +109,7 @@ struct MulABScaleWint4
                                                                             const float &d0,
                                                                             const float &d1) const
     {
-        e = ck::type_convert<F16>(c * d1 * d0 * 16.f);
+        e = ck::type_convert<F16>(c * 16.f);
     }
 
     template <>
@@ -118,7 +118,7 @@ struct MulABScaleWint4
                                                                             const float &d0,
                                                                             const float &d1) const
     {
-        e = ck::type_convert<B16>(c * d1 * d0 * 16.f);
+        e = ck::type_convert<B16>(c * 16.f);
     }
 
     template <>
@@ -127,7 +127,7 @@ struct MulABScaleWint4
                                                                           const float &d0,
                                                                           const float &d1) const
     {
-        e = ck::type_convert<F16>(ck::type_convert<F32>(c) * d1 * d0 * 16.f);
+        e = ck::type_convert<F16>(ck::type_convert<F32>(c) * 16.f);
     }
 
     template <>
@@ -136,7 +136,7 @@ struct MulABScaleWint4
                                                                           const float &d0,
                                                                           const float &d1) const
     {
-        e = ck::type_convert<B16>(ck::type_convert<F32>(c) * d1 * d0 * 16.f);
+        e = ck::type_convert<B16>(ck::type_convert<F32>(c) * 16.f);
     }
 };
 
