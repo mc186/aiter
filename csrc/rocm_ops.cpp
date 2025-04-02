@@ -28,10 +28,14 @@
 #include "rocsolgemm.cuh"
 #include "hipbsolgemm.cuh"
 
-// #include "torch/mha_varlen_fwd.h"
-// #include "torch/mha_varlen_bwd.h"
-// #include "torch/mha_bwd.h"
-// #include "torch/mha_fwd.h"
+#include "torch/mha_varlen_fwd.h"
+#include "torch/mha_varlen_bwd.h"
+#include "torch/mha_bwd.h"
+#include "torch/mha_fwd.h"
+#include "torch/fmha_v3_bwd.h"
+#include "torch/fmha_v3_varlen_bwd.h"
+
+
 #include "rocm_ops.hpp"
 
 #ifdef PREBUILD_KERNELS
@@ -40,8 +44,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
       // remove *TUNE* , MHA*
       // GEMM_A8W8_TUNE_PYBIND;
       RMSNORM_PYBIND;
-      // MHA_VARLEN_BWD_PYBIND;
-      // MHA_BWD_PYBIND;
       GEMM_A8W8_PYBIND;
       CUSTOM_PYBIND;
       SMOOTHQUANT_PYBIND;
@@ -49,8 +51,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
       MOE_CK_PYBIND;
       // BATCHED_GEMM_A8W8_TUNE_PYBIND;
       GEMM_A8W8_ASM_PYBIND;
-      // MHA_VARLEN_FWD_PYBIND;
-      // MHA_BWD_ASM_PYBIND;
       ACTIVATION_PYBIND;
       ATTENTION_ASM_MLA_PYBIND;
       ATTENTION_CK_PYBIND;
@@ -62,6 +62,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
       QUANT_PYBIND;
       ATTENTION_ASM_PYBIND;
       // MHA_FWD_PYBIND;
+      // MHA_BWD_PYBIND;
+      // MHA_VARLEN_FWD_PYBIND;
+      // MHA_VARLEN_BWD_PYBIND;
+      // MHA_BWD_ASM_PYBIND;
+      // MHA_VARLEN_BWD_ASM_PYBIND;
       ATTENTION_RAGGED_PYBIND;
       MOE_OP_PYBIND;
       ROPE_GENERAL_FWD_PYBIND;
