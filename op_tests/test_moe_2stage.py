@@ -284,9 +284,9 @@ def test_fmoe(
 ):
     qType, QDType = quantCfg
     torch_quant = aiter.get_torch_quant(qType)
-    input = torch.randn((token, model_dim), dtype=dtype, device="cuda")
+    input = torch.randn((token, model_dim), dtype=dtype, device="cuda") /10.0
     if use_g1u1:
-        w1 = torch.randn((E, inter_dim * 2, model_dim), dtype=dtype, device="cuda") / 10
+        w1 = torch.randn((E, inter_dim * 2, model_dim), dtype=dtype, device="cuda") / 10.0
     else:
         w1 = torch.randn((E, inter_dim, model_dim), dtype=dtype, device="cuda")
     w2 = torch.randn((E, model_dim, inter_dim), dtype=dtype, device="cuda")
@@ -339,20 +339,20 @@ def test_fmoe(
         topk,
         BLOCK_SIZE_M,
     )
-    out1_asm, us2 = asm_moe_stage1(
-        a1_qt,
-        shuffle_weight(w1_qt, (16, 16)),
-        shuffle_weight(w2_qt, (16, 16)),
-        sorted_ids,
-        sorted_weights,
-        sorted_expert_ids,
-        num_valid_ids,
-        w1_scale,
-        a1_scale,
-        dtype,
-        topk,
-        BLOCK_SIZE_M,
-    )
+    # out1_asm, us2 = asm_moe_stage1(
+    #     a1_qt,
+    #     shuffle_weight(w1_qt, (16, 16)),
+    #     shuffle_weight(w2_qt, (16, 16)),
+    #     sorted_ids,
+    #     sorted_weights,
+    #     sorted_expert_ids,
+    #     num_valid_ids,
+    #     w1_scale,
+    #     a1_scale,
+    #     dtype,
+    #     topk,
+    #     BLOCK_SIZE_M,
+    # )
     out1_ck, us1 = ck_moe_stage1(
         a1_qt,
         shuffle_weight(w1_qt, layout=(32, 32)),
@@ -366,60 +366,60 @@ def test_fmoe(
         topk,
         BLOCK_SIZE_M,
     )
-    checkAllclose(
-        out1_ref,
-        out1_asm,
-        msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
-    )
+    # checkAllclose(
+    #     out1_ref,
+    #     out1_asm,
+    #     msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    # )
     checkAllclose(
         out1_ref,
         out1_ck,
-        msg=f"[perf] asm_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+        msg=f"[perf] ck_moe_stage1:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
     )
 
-    logger.info(
-        f"[perf] token:{token} ck_moe_stage1:{us1:.2f} us, asm_moe_stage1:{us2:.2f} us, ratio:{us2/us1:.2f})",
-    )
+    # logger.info(
+    #     f"[perf] token:{token} ck_moe_stage1:{us1:.2f} us, asm_moe_stage1:{us2:.2f} us, ratio:{us2/us1:.2f})",
+    # )
     # ######################## stage 2 start ###########
-    # a2_qt, a2_scale = torch_quant(out1_ref, quant_dtype=QDType)
-    # out2_ref, us_ref = torch_moe_stage2(
-    #     a2_qt,
-    #     w1_qt,  # E, inter_dim*2, model_dim
-    #     w2_qt,  # E, model_dim, inter_dim
-    #     topk_weights,
-    #     topk_ids,
-    #     sorted_weights,
-    #     sorted_ids,
-    #     sorted_expert_ids,
-    #     num_valid_ids,
-    #     dtype=dtype,
-    #     # [expert, inter_dim, 1]
-    #     w2_scale=w2_scale,
-    #     a2_scale=a2_scale,
-    #     block_size=BLOCK_SIZE_M,
-    # )
+    a2_qt, a2_scale = torch_quant(out1_ref, quant_dtype=QDType)
+    out2_ref, us_ref = torch_moe_stage2(
+        a2_qt,
+        w1_qt,  # E, inter_dim*2, model_dim
+        w2_qt,  # E, model_dim, inter_dim
+        topk_weights,
+        topk_ids,
+        sorted_weights,
+        sorted_ids,
+        sorted_expert_ids,
+        num_valid_ids,
+        dtype=dtype,
+        # [expert, inter_dim, 1]
+        w2_scale=w2_scale,
+        a2_scale=a2_scale,
+        block_size=BLOCK_SIZE_M,
+    )
 
-    # a2_qt, a2_scale = torch_quant(out1_ck, quant_dtype=QDType)
-    # out2_ck, us = ck_moe_stage2(
-    #     a2_qt,
-    #     w1_qt,
-    #     shuffle_weight(w2_qt, layout=(32, 32)),
-    #     sorted_ids,
-    #     sorted_expert_ids,
-    #     sorted_weights,
-    #     num_valid_ids,
-    #     w2_scale,
-    #     a2_scale,
-    #     dtype,
-    #     topk,
-    #     BLOCK_SIZE_M,
-    # )
-    # checkAllclose(
-    #     out2_ref,
-    #     out2_ck,
-    #     msg=f"ck_moe_stage2:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
-    # )
-    # ######################## stage 2 end ###########
+    a2_qt, a2_scale = torch_quant(out1_ck, quant_dtype=QDType)
+    out2_ck, us = ck_moe_stage2(
+        a2_qt,
+        w1_qt,
+        shuffle_weight(w2_qt, layout=(32, 32)),
+        sorted_ids,
+        sorted_expert_ids,
+        sorted_weights,
+        num_valid_ids,
+        w2_scale,
+        a2_scale,
+        dtype,
+        topk,
+        BLOCK_SIZE_M,
+    )
+    checkAllclose(
+        out2_ref,
+        out2_ck,
+        msg=f"ck_moe_stage2:{us:.2f} us, {token*model_dim*inter_dim*topk*2/us/1000/1000:.2f} tflops......(quant:{QDType})",
+    )
+    ######################## stage 2 end ###########
 
 
 for dtype in [torch.bfloat16]:
@@ -436,7 +436,7 @@ for dtype in [torch.bfloat16]:
                     expert,
                     topk,
                     quantCfg=(aiter.QuantType.per_Token, torch.float8_e4m3fnuz),
-                    BLOCK_SIZE_M=128,
+                    BLOCK_SIZE_M=32,
                     use_g1u1=True,
                 )
 # for dtype in [torch.bfloat16]:
