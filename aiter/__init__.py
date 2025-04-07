@@ -22,7 +22,7 @@ from .ops.activation import *
 from .ops.attention import *
 from .ops.custom import *
 from .ops.custom_all_reduce import *
-from .ops.moe_op import *
+#from .ops.moe_op import *
 from .ops.moe_sorting import *
 from .ops.pos_encoding import *
 from .ops.cache import *
