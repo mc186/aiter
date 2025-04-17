@@ -293,6 +293,7 @@
             py::arg("is_causal"),                     \
             py::arg("window_size_left"),              \
             py::arg("window_size_right"),             \
+            py::arg("logits_soft_cap"),               \
             py::arg("return_softmax_lse"),            \
             py::arg("return_dropout_randval"),        \
             py::arg("out") = std::nullopt,            \

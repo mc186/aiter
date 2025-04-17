@@ -14,6 +14,7 @@ fmha_batch_prefill_traits get_ck_fmha_batch_prefill_traits(const mask_info &mask
                                               int head_size_q,
                                               int head_size_v,
                                               bool has_dropout,
+                                              bool has_logits_soft_cap,
                                               bool has_lse,
                                               bool enable_alibi)
 {
@@ -26,6 +27,7 @@ fmha_batch_prefill_traits get_ck_fmha_batch_prefill_traits(const mask_info &mask
                            enable_alibi ? bias_enum::alibi : bias_enum::no_bias,
                            has_lse,
                            has_dropout,
+                           has_logits_soft_cap,
                            false}; // do_fp8_static_quant
 }
 
@@ -51,6 +53,7 @@ fmha_batch_prefill_args get_ck_fmha_batch_prefill_args(bool has_lse,
                                           at::Tensor softmax_lse,
                                           at::Tensor dropout_randval,
                                           float softmax_scale,
+                                          float logits_soft_cap,
                                           float p_dropout,
                                           std::pair<uint64_t*, uint64_t*> drop_seed_offset)
 {
@@ -120,6 +123,7 @@ fmha_batch_prefill_args get_ck_fmha_batch_prefill_args(bool has_lse,
                          softmax_scale, // scale_s
                          1,             // scale_p
                          1,             // scale_o
+                         logits_soft_cap,
                          stride_q,
                          stride_k,
                          stride_v,
@@ -163,6 +167,7 @@ mha_batch_prefill(at::Tensor &q,               // [total_q, hq, d]
                bool is_causal,
                int window_size_left,
                int window_size_right,
+               float logits_soft_cap,
                bool return_softmax_lse,
                bool return_dropout_randval,
                std::optional<at::Tensor> out_,                // [total_q, hq, d]
@@ -267,6 +272,7 @@ mha_batch_prefill(at::Tensor &q,               // [total_q, hq, d]
 
     bool has_lse = return_softmax_lse;
     bool has_dropout = p_dropout > 0.0f;
+    bool has_logits_soft_cap = logits_soft_cap > 0.0f;
 
     at::Tensor softmax_lse;
     if (return_softmax_lse) {
@@ -327,6 +333,7 @@ mha_batch_prefill(at::Tensor &q,               // [total_q, hq, d]
                 head_size_q,
                 head_size_v,
                 has_dropout,
+                has_logits_soft_cap,
                 has_lse,
                 alibi_slopes_.has_value());
 
@@ -352,6 +359,7 @@ mha_batch_prefill(at::Tensor &q,               // [total_q, hq, d]
                 softmax_lse,
                 p,
                 softmax_scale,
+                logits_soft_cap,
                 p_dropout,
                 drop_seed_offset);
 

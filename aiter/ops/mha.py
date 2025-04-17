@@ -63,6 +63,7 @@ def mha_batch_prefill(
     is_causal: bool,
     window_size_left: int,
     window_size_right: int,
+    logits_soft_cap: float,
     return_softmax_lse: bool,
     return_dropout_randval: bool,
     out: Optional[Tensor] = None,
@@ -820,6 +821,7 @@ def _flashinfer_batch_prefill(
     causal: bool,
     window_size_left: int = -1,
     window_size_right: int = -1,
+    logits_soft_cap: float = 0.0,
     alibi_slopes: Optional[torch.Tensor] = None,
     return_lse: bool = False,
     return_softmax: bool = False,
@@ -861,6 +863,12 @@ def _flashinfer_batch_prefill(
     else:
         md_name += '_dropout'
         filter_fwd += '_dropout*'
+    if 0.0 < logits_soft_cap:
+        md_name += '_logits'
+        filter_fwd += '_logits*'
+    else:
+        md_name += '_nlogits'
+        filter_fwd += '_nlogits*'
     blob_gen_cmd = [f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d batch_prefill ' \
         '--receipt 300 --filter {} --output_dir {{}}'.format(filter_fwd)]
 
@@ -880,6 +888,7 @@ def _flashinfer_batch_prefill(
         causal,
         window_size_left,
         window_size_right,
+        logits_soft_cap,
         return_lse,
         return_softmax,
         None,
@@ -1121,6 +1130,7 @@ class FlashInferBatchPrefillFunc(torch.autograd.Function):
         softmax_scale,
         causal,
         window_size,
+        logits_soft_cap,
         alibi_slopes,
         deterministic,
         return_lse,
@@ -1153,6 +1163,7 @@ class FlashInferBatchPrefillFunc(torch.autograd.Function):
             causal=causal,
             window_size_left=window_size[0],
             window_size_right=window_size[1],
+            logits_soft_cap=logits_soft_cap,
             alibi_slopes=alibi_slopes,
             return_lse=return_lse,
             return_softmax=return_softmax and dropout_p > 0,
@@ -1179,6 +1190,42 @@ class FlashInferBatchPrefillFunc(torch.autograd.Function):
             result.append(S_dmask)
 
         return tuple(result)
+
+    @staticmethod
+    def backward(ctx, dout, *args):
+        q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k, rng_state = ctx.saved_tensors
+        dq, dk, dv = torch.empty_like(q), torch.empty_like(k), torch.empty_like(v)
+        head_size_v_og = dout.size(2)
+        dout_padded = dout
+        if head_size_v_og % 8 != 0:
+            dout_padded = torch.nn.functional.pad(dout, [0, 8 - head_size_v_og % 8])
+        _flash_attn_varlen_backward(
+            dout_padded,
+            q,
+            k,
+            v,
+            out,
+            softmax_lse,
+            dq,
+            dk,
+            dv,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            ctx.max_seqlen_q,
+            ctx.max_seqlen_k,
+            ctx.dropout_p,
+            ctx.softmax_scale,
+            ctx.causal,
+            ctx.window_size[0],
+            ctx.window_size[1],
+            ctx.alibi_slopes,
+            ctx.deterministic,
+            rng_state=rng_state,
+        )
+        dq = dq[..., : q.shape[-1]]  # We could have padded the head dimension
+        dk = dk[..., : k.shape[-1]]
+        dv = dv[..., : v.shape[-1]]
+        return dq, dk, dv, None, None, None, None, None, None, None, None, None, None, None, None, None, None
 
 def flash_attn_varlen_func(
     q,
@@ -1285,6 +1332,7 @@ def flashinfer_batch_prefill_func(
     softmax_scale=None,
     causal=False,
     window_size=(-1, -1),  # -1 means infinite context window
+    logits_soft_cap=0.0,
     alibi_slopes=None,
     deterministic=False,
     return_lse=False,
@@ -1357,6 +1405,7 @@ def flashinfer_batch_prefill_func(
         softmax_scale,
         causal,
         window_size,
+        logits_soft_cap,
         alibi_slopes,
         deterministic,
         return_lse,
