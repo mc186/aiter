@@ -76,8 +76,8 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
 
     args.seqstart_q_ptr = nullptr;
 
+    args.seqlen_q = args.max_seqlen_q = q.size(1);
     args.batch = b;
-    args.max_seqlen_q = q.size(0);
     args.hdim_q = d;
     args.hdim_v = d_v;
     args.nhead_q = h;
@@ -95,12 +95,12 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
     args.nhead_stride_q = q.stride(2);
 
     args.batch_stride_k = k.stride(0);
-    args.stride_k = k.stride(1);
-    args.nhead_stride_k = k.stride(2);
+    args.stride_k = k.stride(0);
+    args.nhead_stride_k = k.stride(1);
 
     args.batch_stride_v = v.stride(0);
-    args.stride_v = v.stride(1);
-    args.nhead_stride_v = v.stride(2);
+    args.stride_v = v.stride(0);
+    args.nhead_stride_v = v.stride(1);
 
     args.batch_stride_o = out.stride(0);
     args.stride_o = out.stride(1);
@@ -154,7 +154,7 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
                float logits_soft_cap,
                bool zero_tensors,
                bool return_softmax_lse,
-               std::optional<at::Tensor> out_,                // [total_q, hq, d]
+               std::optional<at::Tensor> out_,               // [total_q, hq, d]
                std::optional<const at::Tensor> alibi_slopes_ // [hq] or [b, hq])
 ){
     auto q_dtype = q.dtype();
@@ -182,13 +182,10 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
     const auto sizes = q.sizes();
 
     const int batch_size = sizes[0];
-    printf("[POYENC] batch_size: %d\n", batch_size);
     int num_heads = sizes[2];
     const int head_size_q = sizes[3];
     const int head_size_v = v.size(2);
     const int num_heads_k = k.size(1);
-    printf("[POYENC] head_size_q: %d\n", head_size_q);
-    printf("[POYENC] head_size_v: %d\n", head_size_v);
 
     const int max_num_blocks_per_seq = kv_page_indices.size(0);
     const int num_blocks = k.size(0);
@@ -223,7 +220,7 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
         CHECK_SHAPE(out, batch_size, sizes[1], sizes[2], head_size_v);
     }
     else {
-        out = torch::empty({seqlen_q, num_heads, head_size_v}, opts.dtype(q_dtype));
+        out = torch::empty({batch_size, seqlen_q, num_heads, head_size_v}, opts.dtype(q_dtype));
     }
 
     // Otherwise the kernel will be launched from cuda:0 device
