@@ -76,7 +76,7 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
 
     args.seqstart_q_ptr = nullptr;
 
-    args.seqlen_q = args.max_seqlen_q = q.size(1);
+    args.seqlen_q = args.max_seqlen_q = 1;
     args.batch = b;
     args.hdim_q = d;
     args.hdim_v = d_v;
@@ -91,8 +91,8 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
     args.logits_soft_cap = logits_soft_cap;
 
     args.batch_stride_q = q.stride(0);
-    args.stride_q = q.stride(1);
-    args.nhead_stride_q = q.stride(2);
+    args.stride_q = q.stride(0);
+    args.nhead_stride_q = q.stride(1);
 
     args.batch_stride_k = k.stride(0);
     args.stride_k = k.stride(0);
@@ -103,8 +103,8 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
     args.nhead_stride_v = v.stride(1);
 
     args.batch_stride_o = out.stride(0);
-    args.stride_o = out.stride(1);
-    args.nhead_stride_o = out.stride(2);
+    args.stride_o = out.stride(0);
+    args.nhead_stride_o = out.stride(1);
 
     args.batch_stride_bias = 0;
     args.stride_bias = 0;
@@ -182,8 +182,8 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
     const auto sizes = q.sizes();
 
     const int batch_size = sizes[0];
-    int num_heads = sizes[2];
-    const int head_size_q = sizes[3];
+    int num_heads = sizes[1];
+    const int head_size_q = sizes[2];
     const int head_size_v = v.size(2);
     const int num_heads_k = k.size(1);
 
@@ -195,7 +195,7 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
     // Faster to transpose q from (b, 1, (nheads_kv ngroups), d) to (b, ngroups, nheads_kv, d) in this case
     // H/t Daniel Haziza
 
-    const int seqlen_q = q.size(1);
+    const int seqlen_q = 1;
 
     TORCH_CHECK(batch_size > 0, "batch size must be postive");
     TORCH_CHECK(head_size_q <= 256, "CK only supports head dimension at most 256");
@@ -204,7 +204,7 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
     TORCH_CHECK(head_size_v % 8 == 0, "query, key, value, and out_ must have a head_size that is a multiple of 8");
     TORCH_CHECK(num_heads % num_heads_k == 0, "Number of heads in key/value must divide number of heads in query");
 
-    CHECK_SHAPE(q, batch_size, seqlen_q, num_heads, head_size_q);
+    CHECK_SHAPE(q, batch_size, num_heads, head_size_q);
     CHECK_SHAPE(k, num_blocks, num_heads_k, head_size_q);
     CHECK_SHAPE(v, num_blocks, num_heads_k, head_size_v);
 
@@ -217,10 +217,10 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
         TORCH_CHECK(out.dtype() == q_dtype, "Output must have the same dtype as inputs");
         CHECK_DEVICE(out);
         TORCH_CHECK(out.stride(-1) == 1, "Output tensor must have contiguous last dimension");
-        CHECK_SHAPE(out, batch_size, sizes[1], sizes[2], head_size_v);
+        CHECK_SHAPE(out, batch_size, num_heads, head_size_v);
     }
     else {
-        out = torch::empty({batch_size, seqlen_q, num_heads, head_size_v}, opts.dtype(q_dtype));
+        out = torch::empty({batch_size, num_heads, head_size_v}, opts.dtype(q_dtype));
     }
 
     // Otherwise the kernel will be launched from cuda:0 device
