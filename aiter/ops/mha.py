@@ -1212,83 +1212,6 @@ class FlashAttnVarlenFunc(torch.autograd.Function):
         dv = dv[..., : v.shape[-1]]
         return dq, dk, dv, None, None, None, None, None, None, None, None, None, None, None, None, None, None
 
-class FlashInferBatchPrefillFunc(torch.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        q,
-        k,
-        v,
-        cu_seqlens_q,
-        kv_indptr,
-        kv_page_indices,
-        max_seqlen_q,
-        max_seqlen_k,
-        dropout_p,
-        softmax_scale,
-        logits_soft_cap,
-        causal,
-        window_size,
-        alibi_slopes,
-        deterministic,
-        return_lse,
-        return_softmax,
-        is_grad_enabled,
-    ):
-        is_grad = is_grad_enabled and any(
-            x.requires_grad for x in [q, k, v]
-        )
-        if softmax_scale is None:
-            softmax_scale = q.shape[-1] ** (-0.5)
-        head_size_q_og = q.size(2)
-        head_size_v_og = v.size(2)
-        if head_size_q_og % 8 != 0:
-            q = torch.nn.functional.pad(q, [0, 8 - head_size_q_og % 8])
-            k = torch.nn.functional.pad(k, [0, 8 - head_size_q_og % 8])
-        if head_size_v_og % 8 != 0:
-            v = torch.nn.functional.pad(v, [0, 8 - head_size_v_og % 8])
-        out_padded, softmax_lse, S_dmask, rng_state = _flashinfer_batch_prefill(
-            q,
-            k,
-            v,
-            cu_seqlens_q,
-            kv_indptr,
-            kv_page_indices,
-            max_seqlen_q,
-            max_seqlen_k,
-            dropout_p,
-            softmax_scale,
-            causal=causal,
-            logits_soft_cap=logits_soft_cap,
-            window_size_left=window_size[0],
-            window_size_right=window_size[1],
-            alibi_slopes=alibi_slopes,
-            return_lse=return_lse,
-            return_softmax=return_softmax and dropout_p > 0,
-        )
-        if is_grad:
-            ctx.save_for_backward(
-                q, k, v, out_padded, softmax_lse, cu_seqlens_q, kv_indptr, rng_state
-            )
-            ctx.dropout_p = dropout_p
-            ctx.max_seqlen_q = max_seqlen_q
-            ctx.max_seqlen_k = max_seqlen_k
-            ctx.softmax_scale = softmax_scale
-            ctx.causal = causal
-            ctx.window_size = window_size
-            ctx.alibi_slopes = alibi_slopes
-            ctx.deterministic = deterministic
-
-        out = out_padded[..., :head_size_v_og]
-
-        result = [out]
-        if return_lse:
-            result.append(softmax_lse)
-        if return_softmax:
-            result.append(S_dmask)
-
-        return tuple(result)
-
 def flash_attn_varlen_func(
     q,
     k,
@@ -1383,6 +1306,84 @@ def flash_attn_varlen_func(
         torch.is_grad_enabled(),
     )
 
+
+class FlashInferBatchPrefillFunc(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        q,
+        k,
+        v,
+        cu_seqlens_q,
+        kv_indptr,
+        kv_page_indices,
+        max_seqlen_q,
+        max_seqlen_k,
+        dropout_p,
+        softmax_scale,
+        logits_soft_cap,
+        causal,
+        window_size,
+        alibi_slopes,
+        deterministic,
+        return_lse,
+        return_softmax,
+        is_grad_enabled,
+    ):
+        is_grad = is_grad_enabled and any(
+            x.requires_grad for x in [q, k, v]
+        )
+        if softmax_scale is None:
+            softmax_scale = q.shape[-1] ** (-0.5)
+        head_size_q_og = q.size(2)
+        head_size_v_og = v.size(2)
+        if head_size_q_og % 8 != 0:
+            q = torch.nn.functional.pad(q, [0, 8 - head_size_q_og % 8])
+            k = torch.nn.functional.pad(k, [0, 8 - head_size_q_og % 8])
+        if head_size_v_og % 8 != 0:
+            v = torch.nn.functional.pad(v, [0, 8 - head_size_v_og % 8])
+        out_padded, softmax_lse, S_dmask, rng_state = _flashinfer_batch_prefill(
+            q,
+            k,
+            v,
+            cu_seqlens_q,
+            kv_indptr,
+            kv_page_indices,
+            max_seqlen_q,
+            max_seqlen_k,
+            dropout_p,
+            softmax_scale,
+            causal=causal,
+            logits_soft_cap=logits_soft_cap,
+            window_size_left=window_size[0],
+            window_size_right=window_size[1],
+            alibi_slopes=alibi_slopes,
+            return_lse=return_lse,
+            return_softmax=return_softmax and dropout_p > 0,
+        )
+        if is_grad:
+            ctx.save_for_backward(
+                q, k, v, out_padded, softmax_lse, cu_seqlens_q, kv_indptr, rng_state
+            )
+            ctx.dropout_p = dropout_p
+            ctx.max_seqlen_q = max_seqlen_q
+            ctx.max_seqlen_k = max_seqlen_k
+            ctx.softmax_scale = softmax_scale
+            ctx.causal = causal
+            ctx.window_size = window_size
+            ctx.alibi_slopes = alibi_slopes
+            ctx.deterministic = deterministic
+
+        out = out_padded[..., :head_size_v_og]
+
+        result = [out]
+        if return_lse:
+            result.append(softmax_lse)
+        if return_softmax:
+            result.append(S_dmask)
+
+        return tuple(result)
+
 def flashinfer_batch_prefill_func(
     q,
     k,
@@ -1476,6 +1477,7 @@ def flashinfer_batch_prefill_func(
         return_attn_probs,
         torch.is_grad_enabled(),
     )
+
 
 def flashinfer_batch_decode_func(
     q,
