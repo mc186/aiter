@@ -145,7 +145,7 @@ fmha_batch_decode_args get_ck_fmha_batch_decode_args(bool has_lse,
 }
 
 std::vector<at::Tensor>
-mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
+mha_batch_decode(at::Tensor &q,                // [b, hq, d]
                const at::Tensor &k,            // [total_k, hk, d]
                const at::Tensor &v,            // [total_k, hk, d]
                const at::Tensor &kv_indptr,    // [b+1]
@@ -154,7 +154,7 @@ mha_batch_decode(at::Tensor &q,                // [b, sq, hq, d]
                float logits_soft_cap,
                bool zero_tensors,
                bool return_softmax_lse,
-               std::optional<at::Tensor> out_,               // [total_q, hq, d]
+               std::optional<at::Tensor> out_,               // [b, hq, d]
                std::optional<const at::Tensor> alibi_slopes_ // [hq] or [b, hq])
 ){
     auto q_dtype = q.dtype();
