@@ -1075,12 +1075,10 @@ def _flashinfer_batch_decode(
     filter_fwd_splitkv2 += '_nmask*'
     filter_fwd_splitkv2 += '_pagedkv*'
 
-    print(f'[POYENC] {filter_fwd_splitkv1=}')
-    print(f'[POYENC] {filter_fwd_splitkv2=}')
     filter_fwd_splitkv = f'{filter_fwd_splitkv1}@{filter_fwd_splitkv2}'
     blob_gen_cmd = [f'{CK_DIR}/example/ck_tile/01_fmha/generate.py -d batch_decode ' \
         '--receipt 200 --filter {} --output_dir {{}}'.format(filter_fwd_splitkv)]
-    print(f'[POYENC] {blob_gen_cmd=}')
+
     q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
     out, softmax_lse = mha_batch_decode(
         q,
