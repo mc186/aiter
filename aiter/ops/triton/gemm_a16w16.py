@@ -121,20 +121,12 @@ def _get_config(
         return _get_config._gemm_config_dict["large"]
 
 # Wrapper for gemm kernel.
-<<<<<<< HEAD
-def gemm_a16w16(
-    x,
-    w,
-    dtype: Optional[float] = torch.bfloat16,
-    y: Optional[torch.Tensor] = None,
-):
-=======
 def gemm_a16w16(x, 
                 w, 
                 dtype: Optional[float] = torch.bfloat16,
+                y: Optional[torch.Tensor] = None,
                 config: Optional[dict] = None,
                 ):
->>>>>>> a3f05356 ([TRITON]: Add Config Support for GEMM_A16W16)
     """
     Computes the 16 bit matmul Y = X x W
 
