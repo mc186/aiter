@@ -3,7 +3,7 @@ import triton
 # For now, there is 1-to-1 correspondence between arch and device
 ARCH_TO_DEVICE = {
     "gfx942": "MI300X",
-    "gfx950": "MI350",
+    "gfx950": "MI350X",
 }
 
 
