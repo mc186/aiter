@@ -3,12 +3,14 @@
 
 from typing import Optional
 import functools
+import sys
 import json
 import torch
 import triton
 import triton.language as tl
 import aiter.ops.triton.utils.arch_info as arch_info
 from aiter.ops.triton.utils.core import AITER_TRITON_OPS_PATH, AITER_TRITON_CONFIGS_PATH
+from aiter.ops.triton.utils.tuning_util import aiter_register
 
 
 @triton.heuristics(
@@ -191,6 +193,7 @@ def _get_config(
     return _get_config._config_dict["any"]
 
 
+@aiter_register(module=sys.modules[__name__], kernels=["_gemm_a8w8_kernel"])
 def gemm_a8w8(
     x: torch.Tensor,
     w: torch.Tensor,

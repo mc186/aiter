@@ -3,6 +3,7 @@
 
 from typing import Optional
 import functools
+import sys
 import json
 import torch
 import triton
@@ -10,6 +11,7 @@ import triton.language as tl
 from aiter.ops.triton.utils.pid_preprocessing import pid_grid, remap_xcd
 import aiter.ops.triton.utils.arch_info as arch_info
 from aiter.ops.triton.utils.core import AITER_TRITON_OPS_PATH, AITER_TRITON_CONFIGS_PATH
+from aiter.ops.triton.utils.tuning_util import aiter_register
 
 
 @triton.heuristics(
@@ -119,6 +121,7 @@ def _get_config(
 
 
 # Wrapper for gemm kernel.
+@aiter_register(module=sys.modules[__name__], kernels=["_gemm_a16_w16_kernel"])
 def gemm_a16w16(x, 
                 w, 
                 dtype: Optional[float] = torch.bfloat16,

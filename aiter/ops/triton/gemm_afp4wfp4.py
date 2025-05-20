@@ -3,6 +3,7 @@
 
 from typing import Optional
 import functools
+import sys
 import json
 import os
 import torch
@@ -11,7 +12,7 @@ import triton.language as tl
 from aiter.ops.triton.utils.pid_preprocessing import pid_grid, remap_xcd
 import aiter.ops.triton.utils.arch_info as arch_info
 from aiter.ops.triton.utils.core import AITER_TRITON_OPS_PATH, AITER_TRITON_CONFIGS_PATH
-
+from aiter.ops.triton.utils.tuning_util import aiter_register
 
 @triton.heuristics(
     {
@@ -239,13 +240,14 @@ def _get_config(
 
 
 # Wrapper for gemm kernel.
+@aiter_register(module=sys.modules[__name__], kernels=["_gemm_afp4_wfp4_kernel"])
 def gemm_afp4wfp4(
     x,
     w,
-    y,
     x_scales,
     w_scales,
     dtype: Optional[float] = torch.bfloat16,
+    y: Optional[torch.Tensor] = None,
     config: Optional[dict] = None,
 ):
     """
@@ -267,6 +269,9 @@ def gemm_afp4wfp4(
 
     M, K = x.shape
     K, N = w.shape
+
+    if y is None:
+        y = torch.empty((M, N), dtype=dtype, device=x.device)
 
     if config["NUM_KSPLIT"] > 1:
         config["SPLITK_BLOCK_SIZE"] = (
@@ -345,3 +350,5 @@ def gemm_afp4wfp4(
             ACTUAL_KSPLIT,
             config["NUM_KSPLIT"],
         )
+
+        return y
