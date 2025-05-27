@@ -1515,4 +1515,4 @@ def flashinfer_batch_decode_func(
     if return_lse:
         result.append(softmax_lse)
 
-    return tuple(result)
+    return result[0] if len(result) == 1 else tuple(result)
