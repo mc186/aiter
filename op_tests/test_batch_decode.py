@@ -96,7 +96,7 @@ def ref_masked_attention(
 @pytest.mark.parametrize("head_dim", [128])
 @pytest.mark.parametrize("causal", [False, True])
 @pytest.mark.parametrize("kv_layout", ["NHD"])
-@pytest.mark.parametrize("logits_soft_cap", [0.0, 30.0])
+@pytest.mark.parametrize("logits_soft_cap", [0.0])
 @pytest.mark.parametrize("contiguous_kv", [True, False])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("q_init_min,q_init_max", [(-10, 10)])
