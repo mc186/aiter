@@ -8,6 +8,7 @@ import pytest
 import torch
 
 import aiter
+from aiter.test_common import perftest
 from einops import rearrange, repeat
 
 
@@ -87,10 +88,13 @@ def ref_masked_attention(
     return out.to(query)
 
 
+@perftest()
+def profile_func(target_func, *args, **kwargs):
+    return target_func(*args, **kwargs)
+
+
 @pytest.mark.parametrize("batch_size", [1, 3, 7])
-@pytest.mark.parametrize(
-    "kv_len", [1, 26, 128, 4097]
-)
+@pytest.mark.parametrize("kv_len", [1, 26, 128, 4097])
 @pytest.mark.parametrize("page_size", [1])
 @pytest.mark.parametrize("num_qo_heads,num_kv_heads", [(6, 1), (3, 1)])
 @pytest.mark.parametrize("head_dim", [128])
@@ -187,7 +191,7 @@ def test_batch_decode_with_paged_kv_cache(
         kv_indptr_gpu,
         kv_indices_gpu,
         logits_soft_cap=logits_soft_cap,
-    )[0]
+    )
 
     for i in range(batch_size):
         perm_dims = [0, 2, 1, 3] if kv_layout == "HND" else [0, 1, 2, 3]
@@ -242,13 +246,16 @@ def test_batch_decode_with_paged_kv_cache(
 
 if __name__ == "__main__":
     for (
+        kv_len,
         causal,
         logits_soft_cap,
         dtype,
-    ) in itertools.product([False, True], [0.0, 30.0], [torch.float16, torch.bfloat16]):
+    ) in itertools.product(
+        [8192], [False, True], [0.0, 30.0], [torch.float16, torch.bfloat16]
+    ):
         test_batch_decode_with_paged_kv_cache(
             batch_size=1,
-            kv_len=8192,
+            kv_len=kv_len,
             page_size=1,
             num_qo_heads=6,
             num_kv_heads=1,
