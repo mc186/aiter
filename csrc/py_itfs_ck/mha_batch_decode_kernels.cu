@@ -244,7 +244,8 @@ mha_batch_decode(at::Tensor &q,                // [b, hq, d]
     }
 
     int num_splits = 0;
-    num_splits = aiter::override_num_splits_if_necessary(batch_size, num_heads, seqlen_q, head_size_v, 0, num_splits);
+    // make sure the kM0 here is same as the one in codegen script
+    num_splits = aiter::override_num_splits_if_necessary(batch_size, num_heads, seqlen_q, head_size_v, 0, num_splits, /*kM0=*/16);
     TORCH_CHECK(num_splits > 0, "num_splits should greater than 0");
     TORCH_CHECK(num_splits <= 128, "num_splits greater than 128 is not supported");
 

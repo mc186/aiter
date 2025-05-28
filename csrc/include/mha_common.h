@@ -42,7 +42,7 @@ inline int num_splits_heuristic_ck(int batch_nheads_mblocks, int num_SMs, int nu
     return max_splits;
 }
 
-inline int override_num_splits_if_necessary(int batch, int nhead, int max_seqlen_q, int hdim_v, float p_drop, int num_splits)
+inline int override_num_splits_if_necessary(int batch, int nhead, int max_seqlen_q, int hdim_v, float p_drop, int num_splits, int kM0 = 64)
 {
     int device;
     auto status = hipGetDevice(&device);
@@ -55,7 +55,6 @@ inline int override_num_splits_if_necessary(int batch, int nhead, int max_seqlen
         return num_splits;
 
     // TODO - tile size should match the TileFmhaShape, hardcode for now
-    const int kM0 = 16; // 16 for fmha_batch_prefill(); 64 for fmha_fwd_splitkv()
     const int kN1 = hdim_v;
 
     const int num_m_blocks = (max_seqlen_q + kM0 - 1) / kM0;
