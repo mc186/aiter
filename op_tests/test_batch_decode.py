@@ -97,7 +97,7 @@ def profile_func(target_func, *args, **kwargs):
 @pytest.mark.parametrize("kv_len", [1, 26, 128, 4097])
 @pytest.mark.parametrize("page_size", [1])
 @pytest.mark.parametrize("num_qo_heads,num_kv_heads", [(6, 1), (3, 1)])
-@pytest.mark.parametrize("head_dim", [128])
+@pytest.mark.parametrize("head_dim", [128, 256])
 @pytest.mark.parametrize("causal", [False, True])
 @pytest.mark.parametrize("kv_layout", ["NHD"])
 @pytest.mark.parametrize("logits_soft_cap", [0.0, 30.0])
