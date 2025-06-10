@@ -3,8 +3,11 @@
 import triton
 import triton.language as tl
 
+
 @triton.jit
-def remap_xcd_chunked(pid, GRID_MN, NUM_XCDS: tl.constexpr = 8, CHUNK_SIZE: tl.constexpr = 2):
+def remap_xcd_chunked(
+    pid, GRID_MN, NUM_XCDS: tl.constexpr = 8, CHUNK_SIZE: tl.constexpr = 2
+):
     # Number of PIDs per XCD
     pids_per_xcd = (GRID_MN + NUM_XCDS - 1) // NUM_XCDS
     # Calculate number of tall XCDs
@@ -27,6 +30,7 @@ def remap_xcd_chunked(pid, GRID_MN, NUM_XCDS: tl.constexpr = 8, CHUNK_SIZE: tl.c
             + pos_in_chunk
         )
     return new_pid
+
 
 @triton.jit
 def remap_xcd(pid, GRID_MN, NUM_XCDS: tl.constexpr = 8):
@@ -56,6 +60,7 @@ def remap_xcd(pid, GRID_MN, NUM_XCDS: tl.constexpr = 8):
         )
 
     return pid
+
 
 @triton.jit
 def pid_grid(pid, num_pid_m, num_pid_n, GROUP_SIZE_M: tl.constexpr = 1):
