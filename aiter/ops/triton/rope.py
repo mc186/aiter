@@ -87,6 +87,90 @@ def _rope_fwd_kernel_neox(
 
 
 @triton.jit
+def _rope_fwd_kernel_neox_tmp(
+    x_ptr: torch.Tensor,
+    freqs_ptr: torch.Tensor,
+    out_ptr: torch.Tensor,
+    stride_x_s,
+    stride_x_b,
+    stride_x_h,
+    stride_x_d,
+    stride_freqs_s,
+    stride_freqs_b,
+    stride_freqs_h,
+    stride_freqs_d,
+    stride_out_s,
+    stride_out_b,
+    stride_out_h,
+    stride_out_d,
+    S,
+    reuse_freqs_front_part: tl.constexpr,
+    BLOCK_S: tl.constexpr,
+    D_MODEL: tl.constexpr,
+    D_MODEL_HALF: tl.constexpr,
+):
+    # Parallelize over batch and head. Handle 1 sequence per program
+    b = tl.program_id(0)
+    h = tl.program_id(1)
+    pid_s = tl.program_id(2)
+
+    # Load freqs for this batch and head (s, 1, 1, d)
+    s_offs = pid_s * BLOCK_S + tl.arange(0, BLOCK_S)
+    d_offs = tl.arange(0, D_MODEL)
+
+    if reuse_freqs_front_part:
+        d_offs_freqs = tl.where(
+            (d_offs >= D_MODEL_HALF) & (d_offs < D_MODEL),
+            d_offs - D_MODEL_HALF,
+            d_offs,
+        ).to(d_offs.dtype)
+    else:
+        d_offs_freqs = d_offs
+
+    freqs_mask = (s_offs[:, None] < S) & (d_offs_freqs[None, :] < D_MODEL)
+    freqs_offs = (
+        s_offs[:, None] * stride_freqs_s + d_offs_freqs[None, :] * stride_freqs_d
+    )
+
+    freqs = tl.load(freqs_ptr + freqs_offs, mask=freqs_mask)
+    cos = tl.cos(freqs.to(tl.float32))
+    sin = tl.sin(freqs.to(tl.float32))
+
+    # Load X
+    x_offs = (
+        b * stride_x_b
+        + s_offs[:, None] * stride_x_s
+        + h * stride_x_h
+        + d_offs[None, :] * stride_x_d
+    )
+    x_mask = (s_offs < S)[:, None] & (d_offs < D_MODEL)[None, :]
+    x = tl.load(x_ptr + x_offs, mask=x_mask)
+    x_rotated_mask = (d_offs < D_MODEL_HALF)[None, :]
+    x_rotated = tl.where(x_rotated_mask, x, -x)
+    x_rotated = tl.reshape(x_rotated, (BLOCK_S, 2, D_MODEL_HALF))
+    x_rotated = tl.flip(x_rotated, 2)
+    x_rotated = tl.reshape(
+        x_rotated,
+        (
+            BLOCK_S,
+            D_MODEL,
+        ),
+    )
+    x_rotated = tl.flip(x_rotated, 1)
+    out_x = x * cos + x_rotated * sin
+    out_x = out_x.to(x_ptr.dtype.element_ty)
+    x_out_offs = (
+        b * stride_out_b
+        + s_offs[:, None] * stride_out_s
+        + h * stride_out_h
+        + d_offs[None, :] * stride_out_d
+    )
+
+    # store output for this batch and head (s, 1, 1, d)
+    tl.store(out_ptr + x_out_offs, out_x, mask=x_mask)
+
+
+@triton.jit
 def _rope_fwd_kernel_gptj(
     x_ptr: torch.Tensor,
     freqs_ptr: torch.Tensor,
@@ -3392,21 +3476,40 @@ def _rope_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
-            _rope_fwd_kernel_neox[grid](
+            # _rope_fwd_kernel_neox[grid](
+            #     x,
+            #     freqs,
+            #     out,
+            #     *x.stride(),
+            #     *freqs.stride(),
+            #     *out.stride(),
+            #     rotate_style,
+            #     reuse_freqs_front_part,
+            #     s,
+            #     d,
+            #     d // 2
+            # )
+            BLOCK_S = 32
+            num_warps = 4
+            waves_per_eu = 0
+            grid = (b, h, triton.cdiv(s, BLOCK_S))
+            _rope_fwd_kernel_neox_tmp[grid](
                 x,
                 freqs,
                 out,
                 *x.stride(),
                 *freqs.stride(),
                 *out.stride(),
-                rotate_style,
-                reuse_freqs_front_part,
                 s,
+                reuse_freqs_front_part,
+                BLOCK_S,
                 d,
-                d // 2
+                d // 2,
+                num_warps=num_warps,
+                waves_per_eu=waves_per_eu,
             )
     else:
         if have_nope:
@@ -3422,7 +3525,7 @@ def _rope_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_gptj[grid](
@@ -3436,7 +3539,7 @@ def _rope_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
 
     return out
@@ -3530,7 +3633,7 @@ def _rope_fwd_thd(
                 nope_first,
                 max_seq_len_pow2,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_neox_thd[grid](
@@ -3545,7 +3648,7 @@ def _rope_fwd_thd(
                 reuse_freqs_front_part,
                 max_seq_len_pow2,
                 d,
-                d // 2
+                d // 2,
             )
     else:
         if have_nope:
@@ -3562,7 +3665,7 @@ def _rope_fwd_thd(
                 nope_first,
                 max_seq_len_pow2,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_gptj_thd[grid](
@@ -3577,7 +3680,7 @@ def _rope_fwd_thd(
                 reuse_freqs_front_part,
                 max_seq_len_pow2,
                 d,
-                d // 2
+                d // 2,
             )
 
     return out
@@ -3672,7 +3775,7 @@ def _rope_cached_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_neox_cached[grid](
@@ -3687,7 +3790,7 @@ def _rope_cached_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
     else:
         if have_nope:
@@ -3704,7 +3807,7 @@ def _rope_cached_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_gptj_cached[grid](
@@ -3719,7 +3822,7 @@ def _rope_cached_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
 
     return out
@@ -3814,7 +3917,7 @@ def _rope_cached_positions_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_neox_cached_position[grid](
@@ -3830,7 +3933,7 @@ def _rope_cached_positions_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
     else:
         if have_nope:
@@ -3848,7 +3951,7 @@ def _rope_cached_positions_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_gptj_cached_position[grid](
@@ -3864,7 +3967,7 @@ def _rope_cached_positions_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
 
     return out
@@ -3966,7 +4069,7 @@ def _rope_cached_positions_offsets_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_neox_cached_position_off[grid](
@@ -3983,7 +4086,7 @@ def _rope_cached_positions_offsets_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
     else:
         if have_nope:
@@ -4002,7 +4105,7 @@ def _rope_cached_positions_offsets_fwd(
                 nope_first,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
         else:
             _rope_fwd_kernel_gptj_cached_position_off[grid](
@@ -4019,7 +4122,7 @@ def _rope_cached_positions_offsets_fwd(
                 reuse_freqs_front_part,
                 s,
                 d,
-                d // 2
+                d // 2,
             )
 
     return out
@@ -4173,7 +4276,7 @@ def _rope_cached_thd_positions_offsets_2c_fwd(
                 HAVE_OFFS=(offsets is not None),
                 num_warps=num_warps,
                 waves_per_eu=waves_per_eu,
-                num_stages=num_stages
+                num_stages=num_stages,
             )
     elif rotate_style == RotateStyle.NEOX:
         if have_nope:
@@ -4204,7 +4307,7 @@ def _rope_cached_thd_positions_offsets_2c_fwd(
                 HAVE_OFFS=(offsets is not None),
                 num_warps=num_warps,
                 waves_per_eu=waves_per_eu,
-                num_stages=num_stages
+                num_stages=num_stages,
             )
 
     return out_x, out_y
@@ -4431,7 +4534,7 @@ def _rope_cached_thd_positions_offsets_2c_gqa_fwd(
                     HAVE_OFFS=(offsets is not None),
                     num_warps=num_warps,
                     waves_per_eu=waves_per_eu,
-                    num_stages=num_stages
+                    num_stages=num_stages,
                 )
             else:
                 _rope_fwd_kernel_gptj_cached_thd_position_offsets_2c_gqa_one_head[grid](
@@ -4456,7 +4559,7 @@ def _rope_cached_thd_positions_offsets_2c_gqa_fwd(
                     D_MODEL_HALF=D_MODEL_HALF,
                     HAVE_OFFS=(offsets is not None),
                     num_warps=num_warps,
-                    waves_per_eu=waves_per_eu
+                    waves_per_eu=waves_per_eu,
                 )
 
     elif rotate_style == RotateStyle.NEOX:
@@ -4524,7 +4627,7 @@ def _rope_cached_thd_positions_offsets_2c_gqa_fwd(
                 D_MODEL_HALF=D_MODEL_HALF,
                 HAVE_OFFS=(offsets is not None),
                 num_warps=num_warps,
-                waves_per_eu=waves_per_eu
+                waves_per_eu=waves_per_eu,
             )
 
     return out_x, out_y
@@ -4695,7 +4798,7 @@ def _rope_fwd_2d(
         wh,
         img_height,
         img_width,
-        D_MODEL=d
+        D_MODEL=d,
     )
 
     return out
