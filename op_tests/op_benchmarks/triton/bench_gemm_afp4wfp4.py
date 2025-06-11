@@ -186,7 +186,6 @@ def parse_args():
 def main():
     args = parse_args()
     if args.print_vgpr:
-        assert not args.bench_torch, "Do not use -bench_torch with -print_vgpr."
         print("Retrieving VGPR usage for Triton kernels...")
         fun = lambda: run_benchmark(args)  # noqa: E731
         print_vgpr(fun, "GEMM")
