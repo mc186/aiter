@@ -75,21 +75,21 @@ def _gemm_afp4_wfp4_kernel(
     # Map program ids `pid` to the block of C it should compute.
     # This is done in a grouped ordering to promote L2 data reuse.
     pid_unified = tl.program_id(axis=0)
+    # remap so that XCDs get continous chunks of pids (of CHUNK_SIZE).
+    pid_unified = remap_xcd_chunked(pid_unified, GRID_MN*NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=min(2, GROUP_SIZE_M))
     pid_k = pid_unified % NUM_KSPLIT
     pid = pid_unified // NUM_KSPLIT
     num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
 
     if NUM_KSPLIT == 1:
-        # number of XCDs expected as 8 (MI300 and MI350)
-        pid = remap_xcd_chunked(pid, GRID_MN, NUM_XCDS=8, CHUNK_SIZE=GROUP_SIZE_M)
         pid_m, pid_n = pid_grid(pid, num_pid_m, num_pid_n, GROUP_SIZE_M=GROUP_SIZE_M)
     else:
         pid_m = pid // num_pid_n
         pid_n = pid % num_pid_n
 
-    tl.assume(pid_m > 0)
-    tl.assume(pid_n > 0)
+    tl.assume(pid_m >= 0)
+    tl.assume(pid_n >= 0)
     # We assume 32 elements along K share the same scale.
     SCALE_GROUP_SIZE: tl.constexpr = 32
 
@@ -226,20 +226,20 @@ def _gemm_afp4_wfp4_kernel_preshuffled_scales(
     # Map program ids `pid` to the block of C it should compute.
     # This is done in a grouped ordering to promote L2 data reuse.
     pid_unified = tl.program_id(axis=0)
+    pid_unified = remap_xcd_chunked(pid_unified, GRID_MN*NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=min(2, GROUP_SIZE_M))
     pid_k = pid_unified % NUM_KSPLIT
     pid = pid_unified // NUM_KSPLIT
     num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
 
     if NUM_KSPLIT == 1:
-        pid = remap_xcd_chunked(pid, GRID_MN, NUM_XCDS=8, CHUNK_SIZE=GROUP_SIZE_M)
         pid_m, pid_n = pid_grid(pid, num_pid_m, num_pid_n, GROUP_SIZE_M=GROUP_SIZE_M)
     else:
         pid_m = pid // num_pid_n
         pid_n = pid % num_pid_n
 
-    tl.assume(pid_m > 0)
-    tl.assume(pid_n > 0)
+    tl.assume(pid_m >= 0)
+    tl.assume(pid_n >= 0)
     # We assume 32 elements along K share the same scale.
     SCALE_GROUP_SIZE: tl.constexpr = 32
 
