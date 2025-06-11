@@ -143,6 +143,7 @@ def _rope_fwd_kernel_sbhd(
     )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # store output for this batch and head (s, 1, 1, d)
     tl.store(out_ptr + x_out_offs, out_x, mask=x_mask)
 
@@ -524,98 +525,17 @@ def _rope_fwd_kernel_neox_thd(
     cu_seqlens_ptr,
     freqs_ptr,
     out_ptr,
-    stride_x_t,
-    stride_x_h,
-    stride_x_d,
-    stride_freqs_t,
-    stride_freqs_b,
-    stride_freqs_h,
-    stride_freqs_d,
-    stride_out_t,
-    stride_out_h,
-    stride_out_d,
-    rotate_style: tl.constexpr,
-    reuse_freqs_front_part: tl.constexpr,
-    MAX_SEQ_LEN_POW2: tl.constexpr,
-    D_MODEL: tl.constexpr,
-    D_MODEL_HALF: tl.constexpr,
-):
-    b = tl.program_id(0)
-    h = tl.program_id(1)
-
-    s_start = tl.load(cu_seqlens_ptr + b)
-    s_end = tl.load(cu_seqlens_ptr + b + 1)
-    s = s_end - s_start
-
-    # Load freqs for this batch and head (s, 1, 1, d)
-    # Note: freqs_offs are not offset by s_start. They always start at 0 because
-    # sequence for each batch starts from 0
-    offs_s = tl.arange(0, MAX_SEQ_LEN_POW2)
-    mask_s = offs_s < s
-    if reuse_freqs_front_part:
-        freqs_offs_d = tl.arange(0, D_MODEL)
-        freqs_offs_d = tl.where(
-            (freqs_offs_d >= D_MODEL_HALF) & (freqs_offs_d < D_MODEL),
-            freqs_offs_d - D_MODEL_HALF,
-            freqs_offs_d,
-        ).to(freqs_offs_d.dtype)
-        freqs_mask_d = freqs_offs_d < D_MODEL
-    else:
-        freqs_offs_d = tl.arange(0, D_MODEL)
-        freqs_mask_d = freqs_offs_d < D_MODEL
-
-    freqs_offs = (
-        offs_s[:, None] * stride_freqs_t + freqs_offs_d[None, :] * stride_freqs_d
-    )
-    freqs_mask = (mask_s[:, None]) & (freqs_mask_d[None, :])
-    freqs = tl.load(freqs_ptr + freqs_offs, mask=freqs_mask)
-
-    # Load X
-    x_offs_d = tl.arange(0, D_MODEL)
-    x_offs = (
-        (s_start + offs_s)[:, None] * stride_x_t
-        + h * stride_x_h
-        + x_offs_d[None, :] * stride_x_d
-    )
-    x_mask = (mask_s[:, None]) & (x_offs_d < D_MODEL)[None, :]
-    x = tl.load(x_ptr + x_offs, mask=x_mask)
-
-    # Load X rotated
-    # rotate_style: NEOX
-    x_offs_d_rotated = tl.where(
-        x_offs_d < D_MODEL_HALF, x_offs_d + D_MODEL_HALF, x_offs_d - D_MODEL_HALF
-    ).to(x_offs_d.dtype)
-    x_offs_rotated = (
-        (s_start + offs_s)[:, None] * stride_x_t
-        + h * stride_x_h
-        + x_offs_d_rotated[None, :] * stride_x_d
-    )
-    x_rotated = tl.load(x_ptr + x_offs_rotated, mask=x_mask)
-    x_rotated = tl.where(
-        x_offs_d_rotated[None, :] >= D_MODEL_HALF, -x_rotated, x_rotated
-    )
-
-    # compute cos(freqs)
-    fc = tl.cos(freqs.to(tl.float32))
-
-    # compute sin(freqs)
-    fs = tl.sin(freqs.to(tl.float32))
-
-    # compute output
-    out = x * fc + x_rotated * fs
-
-    out = out.to(x_ptr.dtype.element_ty)
-
-    # store output for this batch and head (s, 1, 1, d)
-    tl.store(out_ptr + x_offs, out, mask=x_mask)
+=======
+    tl.store(out_ptr + x_out_offs, out_x, mask=x_mask)
 
 
 @triton.jit
-def _rope_fwd_kernel_gptj_thd(
+def _rope_fwd_kernel_thd(
     x_ptr: torch.Tensor,
     cu_seqlens_ptr: torch.Tensor,
     freqs_ptr: torch.Tensor,
     out_ptr: torch.Tensor,
+>>>>>>> cce9cfd2 (merge all _thd kernels into one kernel)
     stride_x_t,
     stride_x_h,
     stride_x_d,
@@ -626,38 +546,53 @@ def _rope_fwd_kernel_gptj_thd(
     stride_out_t,
     stride_out_h,
     stride_out_d,
-    rotate_style: tl.constexpr,
-    reuse_freqs_front_part: tl.constexpr,
-    MAX_SEQ_LEN_POW2: tl.constexpr,
-    D_MODEL: tl.constexpr,
-    D_MODEL_HALF: tl.constexpr,
+    REUSE_FREQS_FRONT_PART: tl.constexpr,
+    IS_NEOX: tl.constexpr,
+    BLOCK_T: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+    BLOCK_D_HALF: tl.constexpr,
 ):
     # Parallelize over batch and head. Handle 1 sequence per program
     b = tl.program_id(0)
     h = tl.program_id(1)
+    pid_t = tl.program_id(2)
 
-    s_start = tl.load(cu_seqlens_ptr + b)
-    s_end = tl.load(cu_seqlens_ptr + b + 1)
-    s = s_end - s_start
+    t_start = tl.load(cu_seqlens_ptr + b)
+    t_end = tl.load(cu_seqlens_ptr + b + 1)
+    T = t_end - t_start
+    if pid_t * BLOCK_T >= T:
+        return
 
-    # Load freqs for this batch and head (s, 1, 1, d)
-    offs_s = tl.arange(0, MAX_SEQ_LEN_POW2)
-    mask_s = offs_s < s
-    if reuse_freqs_front_part:
-        freqs_offs_d = tl.arange(0, D_MODEL) // 2
-        freqs_mask_d = freqs_offs_d < D_MODEL_HALF
+    t_offs = pid_t * BLOCK_T + tl.arange(0, BLOCK_T)
+    d_offs = tl.arange(0, BLOCK_D)
+    t_mask = (t_offs < T)[:, None]
+
+    if REUSE_FREQS_FRONT_PART:
+        if IS_NEOX:
+            d_offs_freqs = tl.where(
+                (d_offs >= BLOCK_D_HALF) & (d_offs < BLOCK_D),
+                d_offs - BLOCK_D_HALF,
+                d_offs,
+            ).to(d_offs.dtype)
+            freqs_mask = t_mask & (d_offs_freqs < BLOCK_D)[None, :]
+        else:
+            d_offs_freqs = d_offs // 2
+            freqs_mask = t_mask & (d_offs_freqs < BLOCK_D_HALF)[None, :]
     else:
-        freqs_offs_d = tl.arange(0, D_MODEL)
-        freqs_mask_d = freqs_offs_d < D_MODEL
-    freqs_offs = (
-        offs_s[:, None] * stride_freqs_t + freqs_offs_d[None, :] * stride_freqs_d
-    )
-    freqs_mask = (mask_s[:, None]) & (freqs_mask_d[None, :])
-    freqs = tl.load(freqs_ptr + freqs_offs, mask=freqs_mask)
+        d_offs_freqs = d_offs
+        freqs_mask = t_mask & (d_offs_freqs < BLOCK_D)[None, :]
 
-    # Load X [D_MODEL]
-    x_offs_d = tl.arange(0, D_MODEL)
+    # we don't need stride_freqs_b and stride_freqs_h here, as freqs_ptr has the shape of (T, 1, 1, D)
+    freqs_offs = (
+        t_offs[:, None] * stride_freqs_t + d_offs_freqs[None, :] * stride_freqs_d
+    )
+
+    freqs = tl.load(freqs_ptr + freqs_offs, mask=freqs_mask)
+    cos = tl.cos(freqs.to(tl.float32))
+    sin = tl.sin(freqs.to(tl.float32))
+
     x_offs = (
+<<<<<<< HEAD
         stride_x_t * s_start
         + stride_x_t * offs_s[:, None]
         + stride_x_h * h
@@ -902,63 +837,35 @@ def _rope_fwd_kernel_gptj_nope_thd(
     x_offs_d = tl.arange(0, D_MODEL)
     x_offs = (
         (s_start + offs_s)[:, None] * stride_x_t
+=======
+        (t_start + t_offs)[:, None] * stride_x_t
+>>>>>>> cce9cfd2 (merge all _thd kernels into one kernel)
         + h * stride_x_h
-        + x_offs_d[None, :] * stride_x_d
+        + d_offs[None, :] * stride_x_d
     )
-    if nope_first:
-        x_mask_d = (x_offs_d >= D_MODEL_HALF) & (x_offs_d < D_MODEL)
-    else:
-        x_mask_d = x_offs_d < D_MODEL_HALF
-    x_mask = (mask_s[:, None]) & (x_mask_d[None, :])
+    x_mask = t_mask & (d_offs < BLOCK_D)[None, :]
     x = tl.load(x_ptr + x_offs, mask=x_mask)
 
-    # Load rotated.
-    # rotate_style:GPTJ
-    # X1 = even idx of x, [D_MODEL/2]
-    # X2 = odd idx of x, [D_MODEL/2]
-    x_offs_rotated_d = tl.arange(0, D_MODEL_HALF) * 2
-    if nope_first:
-        x_mask_rotated_d = x_offs_rotated_d >= D_MODEL_HALF
+    if IS_NEOX:
+        x_rotated_mask = (d_offs < BLOCK_D_HALF)[None, :]
+        x_rotated = _get_neox_rotated_x(
+            x, x_rotated_mask, BLOCK_T, BLOCK_D, BLOCK_D_HALF
+        )
     else:
-        x_mask_rotated_d = x_offs_rotated_d < D_MODEL_HALF
-    x_offs_rotated_base = (
-        stride_x_t * s_start + stride_x_t * offs_s[:, None] + stride_x_h * h
+        x_rotated_mask = (d_offs % 2 == 0)[None, :]
+        x_rotated = _get_gptj_rotated_x(
+            x, x_rotated_mask, BLOCK_T, BLOCK_D, BLOCK_D_HALF
+        )
+
+    out_x = x * cos + x_rotated * sin
+    out_x = out_x.to(x_ptr.dtype.element_ty)
+    x_out_offs = (
+        (t_start + t_offs)[:, None] * stride_out_t
+        + h * stride_out_h
+        + d_offs[None, :] * stride_out_d
     )
-    x1_offs = x_offs_rotated_base + stride_x_d * x_offs_rotated_d[None, :]
-    x2_offs = x_offs_rotated_base + stride_x_d * (x_offs_rotated_d + 1)[None, :]
-    x_mask_rotated = (mask_s[:, None]) & (x_mask_rotated_d)[None, :]
-    x1 = tl.load(x_ptr + x1_offs, mask=x_mask_rotated)
-    x2 = tl.load(x_ptr + x2_offs, mask=x_mask_rotated)
-    x2 = -x2
-    x_rotated = tl.interleave(x2, x1)
 
-    # compute cos(freqs)
-    fc = tl.cos(freqs.to(tl.float32))
-
-    # compute sin(freqs)
-    fs = tl.sin(freqs.to(tl.float32))
-
-    # compute output
-    out = x * fc + x_rotated * fs
-
-    # Load nope
-    if nope_first:
-        x_nope_mask_d = tl.where(x_offs_d < D_MODEL_HALF, 1, 0).to(
-            x_mask_rotated_d.dtype
-        )
-    else:
-        x_nope_mask_d = tl.where(x_offs_d >= D_MODEL_HALF, 1, 0).to(
-            x_mask_rotated_d.dtype
-        )
-    x_nope_mask = (mask_s[:, None]) & (x_nope_mask_d)[None, :]
-    x_nope = tl.load(x_ptr + x_offs, mask=x_nope_mask)
-
-    out = out + x_nope
-    out = out.to(x_ptr.dtype.element_ty)
-
-    # store output for this batch and head (1, 1, 1, d)
-    out_mask = mask_s[:, None] & (x_offs_d < D_MODEL)[None, :]
-    tl.store(out_ptr + x_offs, out, mask=out_mask)
+    tl.store(out_ptr + x_out_offs, out_x, mask=x_mask)
 
 
 @triton.jit
@@ -3392,7 +3299,6 @@ def _rope_fwd(
         x_ = x
         out_ = out
 
-    grid = (b, h, s)
     # TODO: performance optimization
     BLOCK_S = 32
     num_warps = 4
@@ -3453,6 +3359,7 @@ def rope_fwd_inplace(
     transpose_output: bool = False,
 ) -> torch.Tensor:
     out = x
+
     _rope_fwd(
         x,
         out,
@@ -3475,6 +3382,7 @@ def _rope_fwd_thd(
     rotate_style: int,
     reuse_freqs_front_part: bool,
     nope_first: bool,
+    inplace: bool,
     transpose_output: bool = False,
 ) -> torch.Tensor:
     b = torch.numel(cu_seqlens) - 1
@@ -3490,74 +3398,47 @@ def _rope_fwd_thd(
     else:
         have_nope = False
 
-    seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).to(torch.int)
-    max_seq_len_pow2 = triton.next_power_of_2(torch.max(seqlens).item())
-    grid = (b, h, 1)
-
-    if rotate_style == RotateStyle.NEOX:
-        if have_nope:
-            _rope_fwd_kernel_neox_nope_thd[grid](
-                x,
-                cu_seqlens,
-                freqs,
-                out,
-                *x.stride(),
-                *freqs.stride(),
-                *out.stride(),
-                rotate_style,
-                reuse_freqs_front_part,
-                nope_first,
-                max_seq_len_pow2,
-                d,
-                d // 2,
-            )
-        else:
-            _rope_fwd_kernel_neox_thd[grid](
-                x,
-                cu_seqlens,
-                freqs,
-                out,
-                *x.stride(),
-                *freqs.stride(),
-                *out.stride(),
-                rotate_style,
-                reuse_freqs_front_part,
-                max_seq_len_pow2,
-                d,
-                d // 2,
-            )
+    if have_nope:
+        BLOCK_D = d // 2
+        BLOCK_D_HALF = d // 4
+        if nope_first:
+            x_ = x[..., BLOCK_D:]
+            out_ = out[..., BLOCK_D:]
+            if not inplace:
+                out[..., :BLOCK_D] = x[..., :BLOCK_D]
+        elif have_nope:
+            x_ = x[..., :BLOCK_D]
+            out_ = out[..., :BLOCK_D]
+            if not inplace:
+                out[..., BLOCK_D:] = x[..., BLOCK_D:]
     else:
-        if have_nope:
-            _rope_fwd_kernel_gptj_nope_thd[grid](
-                x,
-                cu_seqlens,
-                freqs,
-                out,
-                *x.stride(),
-                *freqs.stride(),
-                *out.stride(),
-                rotate_style,
-                reuse_freqs_front_part,
-                nope_first,
-                max_seq_len_pow2,
-                d,
-                d // 2,
-            )
-        else:
-            _rope_fwd_kernel_gptj_thd[grid](
-                x,
-                cu_seqlens,
-                freqs,
-                out,
-                *x.stride(),
-                *freqs.stride(),
-                *out.stride(),
-                rotate_style,
-                reuse_freqs_front_part,
-                max_seq_len_pow2,
-                d,
-                d // 2,
-            )
+        BLOCK_D = d
+        BLOCK_D_HALF = d // 2
+        x_ = x
+        out_ = out
+
+    # TODO: performance optimization
+    BLOCK_T = 32
+    num_warps = 4
+    waves_per_eu = 0
+    grid = (b, h, triton.cdiv(t, BLOCK_T))
+
+    _rope_fwd_kernel_thd[grid](
+        x_,
+        cu_seqlens,
+        freqs,
+        out_,
+        *x_.stride(),
+        *freqs.stride(),
+        *out_.stride(),
+        REUSE_FREQS_FRONT_PART=reuse_freqs_front_part,
+        IS_NEOX=(rotate_style == RotateStyle.NEOX),
+        BLOCK_T=BLOCK_T,
+        BLOCK_D=BLOCK_D,
+        BLOCK_D_HALF=BLOCK_D_HALF,
+        num_warps=num_warps,
+        waves_per_eu=waves_per_eu,
+    )
 
     return out
 
@@ -3582,6 +3463,7 @@ def rope_fwd_thd(
         rotate_style,
         reuse_freqs_front_part,
         nope_first,
+        False,
         transpose_output,
     )
 
@@ -3598,6 +3480,7 @@ def rope_fwd_thd_inplace(
     transpose_output: bool = False,
 ) -> torch.Tensor:
     out = x
+
     _rope_fwd_thd(
         x,
         out,
@@ -3606,6 +3489,7 @@ def rope_fwd_thd_inplace(
         rotate_style,
         reuse_freqs_front_part,
         nope_first,
+        True,
         transpose_output,
     )
 
