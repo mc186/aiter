@@ -3398,7 +3398,7 @@ def _rope_fwd(
             out_ = out[..., BLOCK_D:]
             if not inplace:
                 out[..., :BLOCK_D] = x[..., :BLOCK_D]
-        elif have_nope:
+        else:
             x_ = x[..., :BLOCK_D]
             out_ = out[..., :BLOCK_D]
             if not inplace:
@@ -3516,7 +3516,7 @@ def _rope_fwd_thd(
             out_ = out[..., BLOCK_D:]
             if not inplace:
                 out[..., :BLOCK_D] = x[..., :BLOCK_D]
-        elif have_nope:
+        else:
             x_ = x[..., :BLOCK_D]
             out_ = out[..., :BLOCK_D]
             if not inplace:
@@ -3640,7 +3640,7 @@ def _rope_cached_fwd(
             out_ = out[..., BLOCK_D:]
             if not inplace:
                 out[..., :BLOCK_D] = x[..., :BLOCK_D]
-        elif have_nope:
+        else:
             x_ = x[..., :BLOCK_D]
             out_ = out[..., :BLOCK_D]
             if not inplace:
