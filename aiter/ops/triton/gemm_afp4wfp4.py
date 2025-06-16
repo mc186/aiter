@@ -8,7 +8,7 @@ import os
 import torch
 import triton
 import triton.language as tl
-from aiter.ops.triton.utils.pid_preprocessing import pid_grid, remap_xcd_chunked
+from aiter.ops.triton.utils.pid_preprocessing import pid_grid, remap_xcd_chunked, remap_xcd
 import aiter.ops.triton.utils.arch_info as arch_info
 from aiter.ops.triton.utils.core import AITER_TRITON_CONFIGS_PATH
 
