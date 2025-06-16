@@ -77,7 +77,7 @@ def _gemm_afp4_wfp4_kernel(
     pid_unified = tl.program_id(axis=0)
     # remap so that XCDs get continous chunks of pids (of CHUNK_SIZE).
     pid_unified = remap_xcd_chunked(
-        pid_unified, GRID_MN * NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=min(2, GROUP_SIZE_M)
+        pid_unified, GRID_MN * NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=max(2, GROUP_SIZE_M)
     )
     pid_k = pid_unified % NUM_KSPLIT
     pid = pid_unified // NUM_KSPLIT
@@ -229,7 +229,7 @@ def _gemm_afp4_wfp4_kernel_preshuffled_scales(
     # This is done in a grouped ordering to promote L2 data reuse.
     pid_unified = tl.program_id(axis=0)
     pid_unified = remap_xcd_chunked(
-        pid_unified, GRID_MN * NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=min(2, GROUP_SIZE_M)
+        pid_unified, GRID_MN * NUM_KSPLIT, NUM_XCDS=8, CHUNK_SIZE=max(2, GROUP_SIZE_M)
     )
     pid_k = pid_unified % NUM_KSPLIT
     pid = pid_unified // NUM_KSPLIT
@@ -644,10 +644,6 @@ def gemm_afp4wfp4_preshuffled_scales(
         y_pp = None
 
     config["BLOCK_SIZE_N"] = max(config["BLOCK_SIZE_N"], 32)
-
-    if config["num_warps"] * 32 > config["BLOCK_SIZE_N"]:  # compiler condition
-        config["num_warps"] = max(4, config["BLOCK_SIZE_N"] // 32)
-        config["BLOCK_SIZE_N"] = max(config["num_warps"] * 32, config["BLOCK_SIZE_N"])
 
     grid = lambda META: (  # noqa: E731
         (
