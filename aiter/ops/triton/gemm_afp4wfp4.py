@@ -644,6 +644,11 @@ def gemm_afp4wfp4_preshuffled_scales(
         y_pp = None
 
     config["BLOCK_SIZE_N"] = max(config["BLOCK_SIZE_N"], 32)
+
+    if config["num_warps"] * 32 > config["BLOCK_SIZE_N"]:  # compiler condition
+        config["num_warps"] = max(4, config["BLOCK_SIZE_N"] // 32)
+        config["BLOCK_SIZE_N"] = max(config["num_warps"] * 32, config["BLOCK_SIZE_N"])
+
     grid = lambda META: (  # noqa: E731
         (
             META["NUM_KSPLIT"]
@@ -651,6 +656,7 @@ def gemm_afp4wfp4_preshuffled_scales(
             * triton.cdiv(N, META["BLOCK_SIZE_N"])
         ),
     )
+
     _gemm_afp4_wfp4_kernel_preshuffled_scales[grid](
         x,
         w,
