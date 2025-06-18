@@ -20,7 +20,7 @@
     "num_stages": 3,
     "waves_per_eu": 1,
     "matrix_instr_nonkdim": 16,
-    "cache_modifier": null,
+    "cache_modifier": ".cg",
     "NUM_KSPLIT": 1
   },
   "medium_M64": {
@@ -32,7 +32,7 @@
     "num_stages": 3,
     "waves_per_eu": 1,
     "matrix_instr_nonkdim": 16,
-    "cache_modifier": null,
+    "cache_modifier": ".cg",
     "NUM_KSPLIT": 1
   },
   "medium_M128": {
@@ -44,7 +44,7 @@
     "num_stages": 3,
     "waves_per_eu": 1,
     "matrix_instr_nonkdim": 16,
-    "cache_modifier": null,
+    "cache_modifier": ".cg",
     "NUM_KSPLIT": 1
   },
   "large": {
