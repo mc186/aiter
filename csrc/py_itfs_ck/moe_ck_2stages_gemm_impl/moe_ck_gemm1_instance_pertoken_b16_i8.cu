@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
 #include "moe_ck_gemm_common.cuh"
 
 using A0DataType = I8;
