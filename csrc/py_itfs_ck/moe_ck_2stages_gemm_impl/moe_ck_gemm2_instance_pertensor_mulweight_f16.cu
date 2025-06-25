@@ -2,24 +2,14 @@
 // Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 #include "moe_ck_gemm_common.cuh"
 
-using A0DataType          = F16;
-using B0DataType          = F16;
-using AccDataType         = F32;
-using EDataType           = F16;
-using CDEElementOp        = TypeCastExpertWeight;
-const bool Nswizzle       = false;
+using A0DataType = F16;
+using B0DataType = F16;
+using AccDataType = F32;
+using EDataType = F16;
+using CDEElementOp = TypeCastExpertWeight;
+const bool Nswizzle = false;
 const bool PerTensorQuant = true;
+CK_MOE_STAGE2_GEMM_DEFINE(32, 256/sizeof(A0DataType), 1, 4, true)
+CK_MOE_STAGE2_GEMM_DEFINE(64, 256/sizeof(A0DataType), 1, 4, true)
+CK_MOE_STAGE2_GEMM_DEFINE(128, 128/sizeof(A0DataType), 2, 2, true)
 
-const auto V1 = ck::BlockGemmPipelineVersion::v1;
-const auto V3 = ck::BlockGemmPipelineVersion::v3;
-
-CK_MOE_STAGE2_GEMM_DEFINE(32, 256 / sizeof(A0DataType), 1, 4, V1, true)
-CK_MOE_STAGE2_GEMM_DEFINE(64, 256 / sizeof(A0DataType), 1, 4, V1, true)
-CK_MOE_STAGE2_GEMM_DEFINE(128, 128 / sizeof(A0DataType), 1, 4, V1, true)
-CK_MOE_STAGE2_GEMM_DEFINE(256, 128 / sizeof(A0DataType), 1, 4, V1, true)
-
-#if defined(__gfx942__)
-CK_MOE_STAGE2_GEMM_DEFINE(64, 128 / sizeof(A0DataType), 1, 4, V3, true)
-#endif
-CK_MOE_STAGE2_GEMM_DEFINE(128, 128 / sizeof(A0DataType), 1, 4, V3, true)
-CK_MOE_STAGE2_GEMM_DEFINE(256, 128 / sizeof(A0DataType), 1, 4, V3, true)
