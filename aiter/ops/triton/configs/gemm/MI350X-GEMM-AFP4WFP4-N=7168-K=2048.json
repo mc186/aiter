@@ -12,12 +12,12 @@
     "NUM_KSPLIT": 1
   },
   "medium_M32": {
-    "BLOCK_SIZE_M": 16,
+    "BLOCK_SIZE_M": 32,
     "BLOCK_SIZE_N": 32,
-    "BLOCK_SIZE_K": 512,
-    "GROUP_SIZE_M": 2,
+    "BLOCK_SIZE_K": 1024,
+    "GROUP_SIZE_M": 1,
     "num_warps": 4,
-    "num_stages": 3,
+    "num_stages": 2,
     "waves_per_eu": 1,
     "matrix_instr_nonkdim": 16,
     "cache_modifier": ".cg",
@@ -25,8 +25,8 @@
   },
   "medium_M64": {
     "BLOCK_SIZE_M": 32,
-    "BLOCK_SIZE_N": 64,
-    "BLOCK_SIZE_K": 512,
+    "BLOCK_SIZE_N": 32,
+    "BLOCK_SIZE_K": 1024,
     "GROUP_SIZE_M": 2,
     "num_warps": 4,
     "num_stages": 2,
@@ -36,12 +36,12 @@
     "NUM_KSPLIT": 1
   },
   "medium_M128": {
-    "BLOCK_SIZE_M": 32,
+    "BLOCK_SIZE_M": 64,
     "BLOCK_SIZE_N": 64,
     "BLOCK_SIZE_K": 512,
     "GROUP_SIZE_M": 1,
     "num_warps": 4,
-    "num_stages": 2,
+    "num_stages": 3,
     "waves_per_eu": 1,
     "matrix_instr_nonkdim": 16,
     "cache_modifier": ".cg",
