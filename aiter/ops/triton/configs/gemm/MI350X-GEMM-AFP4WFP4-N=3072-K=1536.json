@@ -12,10 +12,10 @@
     "NUM_KSPLIT": 1
   },
   "medium_M32": {
-    "BLOCK_SIZE_M": 16,
+    "BLOCK_SIZE_M": 32,
     "BLOCK_SIZE_N": 16,
     "BLOCK_SIZE_K": 512,
-    "GROUP_SIZE_M": 2,
+    "GROUP_SIZE_M": 1,
     "num_warps": 4,
     "num_stages": 3,
     "waves_per_eu": 1,
@@ -36,10 +36,10 @@
     "NUM_KSPLIT": 1
   },
   "medium_M128": {
-    "BLOCK_SIZE_M": 16,
+    "BLOCK_SIZE_M": 32,
     "BLOCK_SIZE_N": 32,
     "BLOCK_SIZE_K": 512,
-    "GROUP_SIZE_M": 4,
+    "GROUP_SIZE_M": 2,
     "num_warps": 4,
     "num_stages": 3,
     "waves_per_eu": 1,
