@@ -97,7 +97,6 @@ def _gemm_afp4_wfp4_kernel(
     if NUM_KSPLIT == 1:
         pid_m, pid_n = pid_grid(pid, num_pid_m, num_pid_n, GROUP_SIZE_M=GROUP_SIZE_M)
     else:
-
         pid_m = pid // num_pid_n
         pid_n = pid % num_pid_n
 
