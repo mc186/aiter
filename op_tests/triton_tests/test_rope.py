@@ -659,7 +659,16 @@ def test_rope_fwd_cached_thd_2c_gqa(
         )
 
     torch_out_x, torch_out_y = ref_rope_cached_thd_positions_offsets_2c_fwd(
-        x, y, cos, sin, positions, offsets, rotate_style
+        x,
+        y,
+        cos,
+        sin,
+        positions,
+        offsets,
+        rotate_style,
+        reuse_freqs_front_part,
+        nope=False,
+        nope_first=False,
     )
     if DEBUG_MODE:
         print(f"torch_out_x={torch_out_x}")
