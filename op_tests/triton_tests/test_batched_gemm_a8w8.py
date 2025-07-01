@@ -83,7 +83,7 @@ def test_batched_gemm_a8w8(dtype, b, m, n, k, output):
     dtype = str_to_torch_dtype[dtype]
 
     x = torch.randint(-20, 20, (b, m, k), dtype=torch.int8).cuda()
-    weight = torch.randint(-20, 20, (b, k, n), dtype=torch.int8).cuda()
+    weight = torch.randint(-20, 20, (b, n, k), dtype=torch.int8).cuda()
     x_scale = torch.rand([b, m, 1], dtype=torch.float32).cuda() + 1e-6
     w_scale = torch.rand([b, 1, n], dtype=torch.float32).cuda() + 1e-6
     bias = torch.rand([b, 1, n], dtype=dtype).cuda() * 10

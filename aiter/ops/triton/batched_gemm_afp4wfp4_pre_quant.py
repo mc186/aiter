@@ -329,13 +329,15 @@ def batched_gemm_afp4wfp4_pre_quant(
 
     Key parameters:
     - X: Matrix X with shape (B, M, K).
-    - W: Matrix W with shape (B, K, N).
+    - W: Matrix W with shape (B, N, K).
     - X_scales: Matrix with shape (B, M, K // 32)
     - W_scales: Matrix with shape (B, N, K // 32)
 
     Returns:
     - Y: The output matrix with shape (M, N).
     """
+
+    w = w.transpose(1, 2)
 
     Bx, M, K = x.shape
     Bw, K, N = w.shape

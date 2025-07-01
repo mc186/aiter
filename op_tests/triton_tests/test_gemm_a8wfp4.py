@@ -383,7 +383,7 @@ def test_gemm_a8wfp4(M: int, N: int, K: int, a_dtype, out_dtype, CLEAR_GPUS=True
         triton_out = torch.empty(
             x.shape[0], w.shape[0], device=x.device, dtype=out_dtype
         )
-    gemm_a8wfp4(x, w.T, triton_out, x_scales, w_scales, out_dtype)
+    gemm_a8wfp4(x, w, triton_out, x_scales, w_scales, out_dtype)
     if DEBUG:
         print("triton_out:", triton_out, triton_out.shape)
 
