@@ -346,7 +346,7 @@ def batched_gemm_afp4wfp4(
     - W_scales: Matrix with shape (B, N, K // 32)
 
     Returns:
-    - Y: The output matrix with shape (M, N).
+    - Y: The output matrix with shape (B, M, N).
     """
 
     assert arch_info.is_fp4_avail(), "MXFP4 is not available on your device"
