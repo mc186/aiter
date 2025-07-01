@@ -12,6 +12,7 @@ from test_rope import ref_rope_sbhd_fwd, ref_rope_thd_fwd, RotateStyle, ref_rope
 from aiter.ops.triton.rope import (
     rope_fwd,
     rope_fwd_inplace,
+    rope_bwd,
     rope_fwd_thd,
     rope_fwd_thd_inplace,
     rope_cached_fwd,
@@ -50,6 +51,7 @@ def generate_rope_inputs(
     two_inputs: bool,
     layout: str,
     dtype: torch.dtype,
+    bwd: bool = False,
 ):
     torch.manual_seed(20)
     random.seed(20)
@@ -67,8 +69,13 @@ def generate_rope_inputs(
     else:
         raise NotImplementedError(f"layout '{layout}' not supported")
 
-    x = torch.randn(input_x_shape, dtype=dtype, device="cuda")
-    y = torch.randn(input_y_shape, dtype=dtype, device="cuda") if two_inputs else None
+    x = torch.randn(input_x_shape, dtype=dtype, device="cuda", requires_grad=bwd)
+    y = (
+        torch.randn(input_y_shape, dtype=dtype, device="cuda", requires_grad=bwd)
+        if two_inputs
+        else None
+    )
+    g = torch.randn(input_x_shape, dtype=dtype, device="cuda") if bwd else None
 
     freqs_D = D
     if nope:
@@ -105,7 +112,7 @@ def generate_rope_inputs(
         cos = cos.reshape(S, freqs_D)
         sin = sin.reshape(S, freqs_D)
 
-    return x, y, freqs, positions, offsets, cos, sin
+    return x, y, g, freqs, positions, offsets, cos, sin
 
 
 def ref_rope_cached_thd_positions_offsets_2c_fwd(
@@ -188,7 +195,7 @@ def ref_rope_cached_thd_positions_offsets_2c_fwd(
 @pytest.mark.parametrize("reuse_freqs_front_part", [False, True])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("inplace", [True, False])
-def test_rope_fwd_sbhd(
+def test_rope_sbhd_fwd(
     B: int,
     S: int,
     H: int,
@@ -200,7 +207,7 @@ def test_rope_fwd_sbhd(
     inplace: bool,
     dtype: torch.dtype,
 ):
-    x, y, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
         B,
         S,
         H,
@@ -253,6 +260,79 @@ def test_rope_fwd_sbhd(
     torch.testing.assert_close(triton_out, torch_out, atol=1e-1, rtol=1e-1)
 
 
+@pytest.mark.parametrize("B", [1, 2, 15, 32, 57])
+@pytest.mark.parametrize("S", [2, 10, 32])
+@pytest.mark.parametrize("H", [1, 8, 32])
+@pytest.mark.parametrize("D", [4, 64, 128])  # For now, D is power of 2.
+# @pytest.mark.parametrize("B", [32])
+# @pytest.mark.parametrize("S", [32])
+# @pytest.mark.parametrize("H", [32])
+# @pytest.mark.parametrize("D", [128])  # For now, D is power of 2.
+@pytest.mark.parametrize("rotate_style", [RotateStyle.GPTJ, RotateStyle.NEOX])
+@pytest.mark.parametrize(
+    "nope, nope_first", [(False, False), (True, False), (True, True)]
+)
+@pytest.mark.parametrize("reuse_freqs_front_part", [False, True])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_rope_sbhd_bwd(
+    B: int,
+    S: int,
+    H: int,
+    D: int,
+    rotate_style: int,
+    reuse_freqs_front_part: bool,
+    nope: bool,
+    nope_first: bool,
+    dtype: torch.dtype,
+):
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+        B,
+        S,
+        H,
+        1,
+        D,
+        cached=False,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope=nope,
+        pos=False,
+        offs=False,
+        two_inputs=False,
+        layout="sbhd",
+        dtype=dtype,
+        bwd=True,
+    )
+
+    if DEBUG_MODE:
+        print(f"x.shape={x.shape} x={x}")
+        print(f"freqs.shape={freqs.shape} freqs.strides={freqs.stride()} freqs={freqs}")
+
+    triton_out = rope_bwd(
+        g,
+        freqs,
+        rotate_style=rotate_style,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope_first=nope_first,
+        transpose_output=False,
+    )
+
+    torch_fwd = ref_rope_sbhd_fwd(
+        x,
+        freqs,
+        rotate_style=rotate_style,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope_first=nope_first,
+    )
+    torch_fwd.backward(g)
+    torch_out = x.grad
+
+    if DEBUG_MODE:
+        print(f"torch_out={torch_out}")
+
+    if DEBUG_MODE:
+        print(f"triton_out={triton_out}")
+    torch.testing.assert_close(triton_out, torch_out, atol=1e-1, rtol=1e-1)
+
+
 @pytest.mark.parametrize(
     "B, T", [(1, 1), (1, 4), (2, 6), (4, 100), (32, 320), (57, 500)]
 )
@@ -265,7 +345,7 @@ def test_rope_fwd_sbhd(
 @pytest.mark.parametrize("reuse_freqs_front_part", [True, False])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("inplace", [True, False])
-def test_rope_fwd_thd(
+def test_rope_thd_fwd(
     B: int,
     T: int,
     H: int,
@@ -277,7 +357,7 @@ def test_rope_fwd_thd(
     inplace: bool,
     dtype: torch.dtype,
 ):
-    x, y, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
         1,
         T,
         H,
@@ -354,7 +434,7 @@ def test_rope_fwd_thd(
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("pos, offs", [(False, False), (True, False), (True, True)])
-def test_rope_fwd_cached(
+def test_rope_cached_fwd(
     B: int,
     S: int,
     H: int,
@@ -368,7 +448,7 @@ def test_rope_fwd_cached(
     inplace: bool,
     dtype: torch.dtype,
 ):
-    x, y, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
         B,
         S,
         H,
@@ -492,7 +572,7 @@ def test_rope_fwd_cached(
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("pos, offs", [(True, False), (True, True)])
-def test_rope_fwd_cached_thd_2c(
+def test_rope_cached_thd_2c_fwd(
     T: int,
     H: int,
     D: int,
@@ -505,7 +585,7 @@ def test_rope_fwd_cached_thd_2c(
     offs: bool,
     inplace: bool,
 ):
-    x, y, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
         1,
         T,
         H,
@@ -622,7 +702,7 @@ def test_rope_fwd_cached_thd_2c(
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("pos, offs", [(True, False), (True, True)])
-def test_rope_fwd_cached_thd_2c_gqa(
+def test_rope_cached_thd_2c_gqa_fwd(
     T: int,
     QH_per_KH: int,
     KH: int,
@@ -634,7 +714,7 @@ def test_rope_fwd_cached_thd_2c_gqa(
     offs: bool,
     inplace: bool,
 ):
-    x, y, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
         1,
         T,
         KH,
@@ -754,7 +834,7 @@ def test_rope_fwd_cached_thd_2c_gqa(
 # @pytest.mark.parametrize('dtype', [torch.float16, torch.bfloat16]) #TODO bf16 results in accuracy issues
 @pytest.mark.parametrize("dtype", [torch.float16])
 @pytest.mark.parametrize("inplace", [True, False])
-def test_rope_fwd_2d(
+def test_rope_2d_fwd(
     B: int,
     H: int,
     D: int,
