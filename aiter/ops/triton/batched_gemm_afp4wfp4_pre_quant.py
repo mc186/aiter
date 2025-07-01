@@ -337,13 +337,12 @@ def batched_gemm_afp4wfp4_pre_quant(
     - Y: The output matrix with shape (M, N).
     """
 
-    w = w.transpose(1, 2)
-
     Bx, M, K = x.shape
-    Bw, K, N = w.shape
+    Bw, N, K = w.shape
     By, _, _ = y.shape
     assert Bx == Bw == By
     Batch = Bx
+    w = w.transpose(1, 2)
 
     if config is None:
         config = _get_config(M, N, K)
