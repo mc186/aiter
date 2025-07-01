@@ -4,7 +4,6 @@
 from typing import Optional
 import functools
 import json
-import os
 import torch
 import triton
 import triton.language as tl
@@ -98,8 +97,8 @@ def _gemm_a8wfp4_kernel(
         pid_m = pid // num_pid_n
         pid_n = pid % num_pid_n
 
-    tl.assume(pid_m > 0)
-    tl.assume(pid_n > 0)
+    tl.assume(pid_m >= 0)
+    tl.assume(pid_n >= 0)
     # We assume 32 elements along K share the same scale.
     SCALE_GROUP_SIZE: tl.constexpr = 32
 
