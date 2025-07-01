@@ -240,7 +240,7 @@ def gemm_afp4wfp4_pre_quant(
 
     Key parameters:
     - X: Matrix X with shape (M, K).
-    - W: Matrix W with shape (K, N).
+    - W: Matrix W with shape (N, K).
     - X_scales: Matrix with shape (M, K // 32)
     - W_scales: Matrix with shape (N, K // 32)
 
@@ -249,7 +249,10 @@ def gemm_afp4wfp4_pre_quant(
     """
 
     M, K = x.shape
-    K, N = w.shape
+    N, K = w.shape
+
+    # inner kernel expects (K, N)
+    w = w.T
 
     if y is None:
         y = torch.zeros((M, N), dtype=dtype, device=x.device)
