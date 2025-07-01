@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 import pytest
 import os
 import torch
-import triton
 from aiter.ops.triton.gemm_afp4wfp4 import (
     gemm_afp4wfp4,
     gemm_afp4wfp4_preshuffled_scales,
@@ -124,6 +123,7 @@ def get_x_vals():
     # x_vals = [(128, 1024, 4096)]
     x_vals += [(16, 16384, 3328 * 2), (128, 16384, 3328 * 2)]
     x_vals += [(256, 3584, 2112)]
+    x_vals += [(1, 1, 1)]  # minimal case
     return x_vals
 
 

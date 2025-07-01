@@ -1,5 +1,4 @@
 import torch
-import triton
 import pytest
 from aiter.ops.triton.batched_gemm_afp4wfp4 import batched_gemm_afp4wfp4
 import aiter.ops.triton.utils.arch_info as arch_info
@@ -82,6 +81,7 @@ def get_x_vals():
         for m in range(0, 9)
         for (n, k) in [(512, 128), (128, 512)]
     ]
+    x_vals_with_batch += [(1, 1, 1, 1)]
     return x_vals_with_batch
 
 

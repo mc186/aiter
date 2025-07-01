@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 import torch
-import triton
 import pytest
 from enum import Enum
 from aiter.ops.triton.gemm_a8wfp4 import gemm_a8wfp4
@@ -146,7 +145,7 @@ def quantize_to_fp4(w_fp32):
         max_w.squeeze(-1) == 0,
         torch.zeros_like(
             max_w.squeeze(-1), dtype=torch.uint8
-        ),  # 0 in e8m0 = 2^(-127) ≈ 0
+        ),  # 0 in e8m0 = 2^(-127) ? 0
         (torch.log2(w_scale.squeeze(-1)) + 127)
         .round()
         .clamp(0, 127)
@@ -194,6 +193,7 @@ def get_x_vals():
         (8192, 8192, 1024),
         (16384, 8192, 1024),
     ]
+    x_vals += [(1, 1, 1)]  # minimal case
     x_vals += [(2 ** (v - 1), 4096 * v, 4096 * v) for v in range(1, 6)]
     # x_vals = [(128, 1024, 4096)]
     x_vals += [(16, 16384, 3328 * 2), (128, 16384, 3328 * 2)]
