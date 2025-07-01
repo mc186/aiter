@@ -13,8 +13,9 @@ from aiter.ops.triton.rope import (
     rope_fwd,
     rope_fwd_inplace,
     rope_bwd,
-    rope_fwd_thd,
-    rope_fwd_thd_inplace,
+    rope_thd_fwd,
+    rope_thd_fwd_inplace,
+    rope_thd_bwd,
     rope_cached_fwd,
     rope_cached_fwd_inplace,
     rope_cached_positions_fwd,
@@ -398,7 +399,7 @@ def test_rope_thd_fwd(
         print(f"torch_out={torch_out}")
 
     if inplace:
-        triton_out = rope_fwd_thd_inplace(
+        triton_out = rope_thd_fwd_inplace(
             x,
             cu_seqlens,
             freqs,
@@ -408,7 +409,7 @@ def test_rope_thd_fwd(
             transpose_output=False,
         )
     else:
-        triton_out = rope_fwd_thd(
+        triton_out = rope_thd_fwd(
             x,
             cu_seqlens,
             freqs,
@@ -417,6 +418,87 @@ def test_rope_thd_fwd(
             nope_first=nope_first,
             transpose_output=False,
         )
+    if DEBUG_MODE:
+        print(f"triton_out={triton_out}")
+    torch.testing.assert_close(triton_out, torch_out, atol=1e-1, rtol=1e-1)
+
+
+@pytest.mark.parametrize(
+    "B, T", [(1, 1), (1, 4), (2, 6), (4, 100), (32, 320), (57, 500)]
+)
+@pytest.mark.parametrize("H", [1, 8, 32])
+@pytest.mark.parametrize("D", [4, 64, 128])  # For now, D is power of 2.
+@pytest.mark.parametrize("rotate_style", [RotateStyle.NEOX, RotateStyle.GPTJ])
+@pytest.mark.parametrize(
+    "nope, nope_first", [(False, False), (True, False), (True, True)]
+)
+@pytest.mark.parametrize("reuse_freqs_front_part", [True, False])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_rope_thd_bwd(
+    B: int,
+    T: int,
+    H: int,
+    D: int,
+    rotate_style: int,
+    reuse_freqs_front_part: bool,
+    nope: bool,
+    nope_first: bool,
+    dtype: torch.dtype,
+):
+    x, y, g, freqs, positions, offsets, cos, sin = generate_rope_inputs(
+        1,
+        T,
+        H,
+        1,
+        D,
+        cached=False,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope=nope,
+        pos=False,
+        offs=False,
+        two_inputs=False,
+        layout="thd",
+        dtype=dtype,
+        bwd=True,
+    )
+
+    if B > 1:
+        seqlens = random.sample(range(1, T), k=B - 1)
+        seqlens = sorted(seqlens)
+        seqlens = [0] + seqlens + [T]
+    else:
+        seqlens = [0, T]
+    cu_seqlens = torch.Tensor(seqlens).to(torch.int).to(freqs.device)
+
+    if DEBUG_MODE:
+        print(f"cu_seqlens={cu_seqlens}")
+        print(f"x.shape={x.shape} x={x}")
+        print(f"freqs.shape={freqs.shape} freqs.strides={freqs.stride()} freqs={freqs}")
+
+    triton_out = rope_thd_bwd(
+        g,
+        cu_seqlens,
+        freqs,
+        rotate_style=rotate_style,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope_first=nope_first,
+        transpose_output=False,
+    )
+
+    torch_fwd = ref_rope_thd_fwd(
+        x,
+        cu_seqlens,
+        freqs,
+        rotate_style=rotate_style,
+        reuse_freqs_front_part=reuse_freqs_front_part,
+        nope_first=nope_first,
+    )
+    torch_fwd.backward(g)
+    torch_out = x.grad
+
+    if DEBUG_MODE:
+        print(f"torch_out={torch_out}")
+
     if DEBUG_MODE:
         print(f"triton_out={triton_out}")
     torch.testing.assert_close(triton_out, torch_out, atol=1e-1, rtol=1e-1)
