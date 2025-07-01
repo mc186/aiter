@@ -221,11 +221,11 @@ def gemm_a8w8(
     # Check constraints.
     assert x.shape[1] == w.shape[1], "Incompatible dimensions!!!"
 
-    # Transpose w
-    w = w.T
-
     M, K = x.shape
-    K, N = w.shape
+    N, K = w.shape
+
+    # Transpose w (kernel expects (K, N))
+    w = w.T
 
     if y is None:
         y = torch.empty((M, N), dtype=dtype, device=x.device)

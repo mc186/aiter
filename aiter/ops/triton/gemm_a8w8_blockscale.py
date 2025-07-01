@@ -227,16 +227,15 @@ def gemm_a8w8_blockscale(
     *scale_k = (K + scale_block_size_k - 1) // scale_block_size_k
     **scale_n = (N + scale_block_size_n - 1) // scale_block_size_n
     """
+    M, K = x.shape
+    N, K = w.shape
+
+    # Check constraints.
+    assert x.shape[1] == w.shape[1], "Incompatible dimensions!!!"
 
     # Transpose w and w_scale
     w = w.T
     w_scale = w_scale.T
-
-    M, K = x.shape
-    K, N = w.shape
-
-    # Check constraints.
-    assert x.shape[1] == w.shape[0], "Incompatible dimensions!!!"
 
     if y is None:
         y = torch.empty((M, N), dtype=dtype, device=x.device)
