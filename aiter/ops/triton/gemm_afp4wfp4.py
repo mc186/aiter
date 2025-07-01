@@ -629,7 +629,7 @@ def gemm_afp4wfp4_preshuffled_scales(
 
     # Transpose w
     w = w.T
-    
+
     if y is None:
         y = torch.empty((M, N), dtype=dtype, device=x.device)
 

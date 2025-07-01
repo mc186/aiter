@@ -131,13 +131,17 @@ def e8m0_to_f32(x):
 
 def run_torch(x, w, x_scales, w_scales, dtype):
     # First convert the x and w inputs to f32.
-    x_f32 = mxfp4_to_f32(x) # -> (B, M, K)
-    w_f32 = mxfp4_to_f32(w) # -> (B, N, K)
+    x_f32 = mxfp4_to_f32(x)  # -> (B, M, K)
+    w_f32 = mxfp4_to_f32(w)  # -> (B, N, K)
     # Next convert the e8m0 scales to f32.
-    x_scales = x_scales.repeat_interleave(SCALE_GROUP_SIZE, dim=-1).to(torch.float32) # -> (B, M, K)
+    x_scales = x_scales.repeat_interleave(SCALE_GROUP_SIZE, dim=-1).to(
+        torch.float32
+    )  # -> (B, M, K)
     x_scales_f32 = e8m0_to_f32(x_scales)
     x_f32 = x_f32 * x_scales_f32
-    w_scales = w_scales.repeat_interleave(SCALE_GROUP_SIZE, dim=-1).to(torch.float32) # -> (B, N, K)
+    w_scales = w_scales.repeat_interleave(SCALE_GROUP_SIZE, dim=-1).to(
+        torch.float32
+    )  # -> (B, N, K)
     w_scales_f32 = e8m0_to_f32(w_scales)
     assert w_scales_f32.shape == w_scales.shape
     w_f32 = w_f32 * w_scales_f32
