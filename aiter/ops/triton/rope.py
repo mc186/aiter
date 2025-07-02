@@ -6,6 +6,7 @@ import triton
 import triton.language as tl
 from torch import autograd
 from enum import IntEnum
+from typing import Tuple, Union
 
 
 class RotateStyle(IntEnum):
@@ -3403,6 +3404,24 @@ class RoPE(autograd.Function):
             x, freqs, rotate_style, reuse_freqs_front_part, nope_first, transpose_output
         )
 
+    @staticmethod
+    def backward(
+        ctx, output_grads: torch.Tensor
+    ) -> Tuple[Union[torch.Tensor, None], ...]:
+        (freqs,) = ctx.saved_tensors
+        return (
+            rope_bwd(
+                output_grads,
+                freqs,
+                ctx.rotate_style,
+                ctx.reuse_freqs_front_part,
+                ctx.nope_first,
+                ctx.transpose_output,
+            ),
+            None,
+            None,
+        )
+
 
 class RoPETHD(autograd.Function):
     @staticmethod
@@ -3421,6 +3440,22 @@ class RoPETHD(autograd.Function):
         ctx.save_for_backward(cu_seqlens, freqs)
         return rope_thd_fwd(
             x, cu_seqlens, freqs, rotate_style, reuse_freqs_front_part, nope_first
+        )
+
+    @staticmethod
+    def backward(ctx, output_grads) -> Tuple[Union[torch.Tensor, None], ...]:
+        cu_seqlens, freqs = ctx.saved_tensors
+        return (
+            rope_thd_bwd(
+                output_grads,
+                cu_seqlens,
+                freqs,
+                ctx.rotate_style,
+                ctx.reuse_freqs_front_part,
+                ctx.nope_first,
+            ),
+            None,
+            None,
         )
 
 
@@ -3450,6 +3485,23 @@ class RoPECached(autograd.Function):
             reuse_freqs_front_part,
             nope_first,
             transpose_output,
+        )
+
+    @staticmethod
+    def backward(ctx, output_grads) -> Tuple[Union[torch.Tensor, None], ...]:
+        cos, sin = ctx.saved_tensors
+        return (
+            rope_cached_bwd(
+                output_grads,
+                cos,
+                sin,
+                ctx.rotate_style,
+                ctx.reuse_freqs_front_part,
+                ctx.nope_first,
+                ctx.transpose_output,
+            ),
+            None,
+            None,
         )
 
 
