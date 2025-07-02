@@ -406,7 +406,8 @@ def _balance_attn_workload(
         + wid // (CHUNK_BLOCKS_SIZE * NUM_Q_HEADS) * CHUNK_BLOCKS_SIZE
     ) % NUM_BLOCKS
     off_z = wid // (NUM_BLOCKS * NUM_Q_HEADS) % BATCH
-    off_q_head = _remap_XCD(off_q_head, NUM_Q_HEADS - 1, NUM_XCD)
+    #remap
+    #off_q_head = _remap_XCD(off_q_head, NUM_Q_HEADS - 1, NUM_XCD)
 
     return off_z, off_q_head, start_m
 
@@ -476,6 +477,7 @@ def _attn_fwd(
     NUM_XCD: tl.constexpr,
     USE_INT64_STRIDES: tl.constexpr,
 ):
+    tl.device_print("pid")
     # calculate offsets
     wid = tl.program_id(
         0
@@ -950,6 +952,10 @@ def _flash_attn_forward(
     descale_k: Optional[torch.Tensor] = None,
     descale_v: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    
+    if not hasattr(_flash_attn_forward, 'call_count'):
+        _flash_attn_forward.call_count = 0
+    _flash_attn_forward.call_count += 1
 
     if bias is not None:
         raise ValueError("Bias is not supported yet in the Triton Backend")
@@ -1060,6 +1066,11 @@ def _flash_attn_forward(
     grid = lambda META: (  # noqa: E731
         batch * num_q_heads * triton.cdiv(seqlen_q, META["BLOCK_M"]),
     )
+
+    # Print grid configuration before kernel call
+    grid_size = batch * num_q_heads * triton.cdiv(seqlen_q, config["BLOCK_M"])
+#    print(f"Grid configuration: {grid_size} = batch({batch}) * num_q_heads({num_q_heads}) * cdiv(seqlen_q({seqlen_q}), BLOCK_M({config['BLOCK_M']}))")
+    print(f"Call #{_flash_attn_forward.call_count} - Grid configuration: {grid_size} = batch({batch}) * num_q_heads({num_q_heads}) * cdiv(seqlen_q({seqlen_q}), BLOCK_M({config['BLOCK_M']}))")
 
     _attn_fwd[grid](
         q,
