@@ -319,7 +319,7 @@ def run_benchmark(args):
                         transpose_output,
                     )
                 elif inplace:
-                    fn = (
+                    fn = (  # noqa: E731
                         lambda: rope_cached_positions_offsets_fwd_inplace(  # noqa: E731
                             x,
                             cos,
