@@ -2758,7 +2758,7 @@ def _rope_cached_thd_2c_fwd(
         SPLIT_T = (triton.next_power_of_2(t) + BLOCK_T - 1) // BLOCK_T
 
         if t >= 8192:
-            MIN_NUM_WG = 2048
+            MIN_NUM_WG = 4096
         elif t >= 1024:
             MIN_NUM_WG = 1024
         else:
