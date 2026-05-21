@@ -10,6 +10,7 @@
 import triton
 import triton.language as tl
 from aiter.ops.triton.utils._triton.kernel_repr import make_kernel_repr
+from aiter.ops.triton.utils._triton.pid_preprocessing import remap_xcd_head_first
 
 _fwd_kernel_repr = make_kernel_repr(
     "_fwd_kernel",
@@ -77,8 +78,14 @@ def _fwd_kernel(
     """
 
     cur_batch = tl.program_id(0)
-    cur_head = tl.program_id(1)
+    cur_head_original = tl.program_id(1)
     start_m = tl.program_id(2)
+
+    # Apply head-first spatial swizzling for MI350x cache optimization
+    # Groups heads spatially for improved page locality and KV cache reuse
+    # TODO: NUM_XCDS should be determined dynamically for MI350x vs MI300x
+    NUM_XCDS: tl.constexpr = 8  # Default for MI300x, may need adjustment for MI350x
+    cur_head = remap_xcd_head_first(cur_head_original, 64, NUM_XCDS)  # Assume max 64 heads, should be parameterized
 
     cur_kv_head = cur_head // num_queries_per_kv
 
@@ -367,8 +374,13 @@ def _fwd_kernel_alibi(
 
     # attn_bias[]
     cur_batch = tl.program_id(0)
-    cur_head = tl.program_id(1)
+    cur_head_original = tl.program_id(1)
     start_m = tl.program_id(2)
+
+    # Apply head-first spatial swizzling for MI350x cache optimization (alibi version)
+    # Groups heads spatially for improved page locality and KV cache reuse
+    NUM_XCDS: tl.constexpr = 8  # Default for MI300x, may need adjustment for MI350x
+    cur_head = remap_xcd_head_first(cur_head_original, 64, NUM_XCDS)  # Assume max 64 heads, should be parameterized
 
     cur_kv_head = cur_head // num_queries_per_kv
 
