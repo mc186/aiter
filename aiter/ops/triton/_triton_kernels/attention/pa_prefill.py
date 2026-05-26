@@ -72,6 +72,8 @@ def _fwd_kernel(
     BLOCK_N: tl.constexpr,
     SLIDING_WINDOW: tl.constexpr,
     SKIP_DECODE: tl.constexpr,
+    NUM_Q_HEADS: tl.constexpr,
+    NUM_XCDS: tl.constexpr,
 ):
     """
     #TODO: Add Doc
@@ -83,9 +85,7 @@ def _fwd_kernel(
 
     # Apply head-first spatial swizzling for MI350x cache optimization
     # Groups heads spatially for improved page locality and KV cache reuse
-    # TODO: NUM_XCDS should be determined dynamically for MI350x vs MI300x
-    NUM_XCDS: tl.constexpr = 8  # Default for MI300x, may need adjustment for MI350x
-    cur_head = remap_xcd_head_first(cur_head_original, 64, NUM_XCDS)  # Assume max 64 heads, should be parameterized
+    cur_head = remap_xcd_head_first(cur_head_original, NUM_Q_HEADS, NUM_XCDS)
 
     cur_kv_head = cur_head // num_queries_per_kv
 
@@ -367,6 +367,8 @@ def _fwd_kernel_alibi(
     BLOCK_DMODEL_PADDED: tl.constexpr,  # head size padded to a power of 2
     BLOCK_N: tl.constexpr,
     SKIP_DECODE: tl.constexpr,
+    NUM_Q_HEADS: tl.constexpr,
+    NUM_XCDS: tl.constexpr,
 ):
     """
     #TODO: Add Doc
@@ -379,8 +381,7 @@ def _fwd_kernel_alibi(
 
     # Apply head-first spatial swizzling for MI350x cache optimization (alibi version)
     # Groups heads spatially for improved page locality and KV cache reuse
-    NUM_XCDS: tl.constexpr = 8  # Default for MI300x, may need adjustment for MI350x
-    cur_head = remap_xcd_head_first(cur_head_original, 64, NUM_XCDS)  # Assume max 64 heads, should be parameterized
+    cur_head = remap_xcd_head_first(cur_head_original, NUM_Q_HEADS, NUM_XCDS)
 
     cur_kv_head = cur_head // num_queries_per_kv
 

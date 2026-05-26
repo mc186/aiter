@@ -14,6 +14,7 @@ from aiter.ops.triton._triton_kernels.attention.pa_prefill import (
     _fwd_kernel_alibi,
 )
 from aiter.ops.triton.utils.logger import AiterTritonLogger
+from aiter.ops.triton.utils.device_info import get_num_xcds
 
 _LOGGER = AiterTritonLogger()
 
@@ -153,6 +154,8 @@ def context_attention_fwd(
             BLOCK_DMODEL_PADDED=Lk_padded,
             BLOCK_N=BLOCK,
             SKIP_DECODE=skip_decode,
+            NUM_Q_HEADS=head,
+            NUM_XCDS=get_num_xcds(),
             num_warps=NUM_WARPS,
             num_stages=1,
         )
@@ -204,6 +207,8 @@ def context_attention_fwd(
         BLOCK_N=BLOCK,
         SLIDING_WINDOW=sliding_window,
         SKIP_DECODE=skip_decode,
+        NUM_Q_HEADS=head,
+        NUM_XCDS=get_num_xcds(),
         num_warps=NUM_WARPS,
         num_stages=1,
     )

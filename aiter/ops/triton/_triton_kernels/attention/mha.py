@@ -362,6 +362,7 @@ def _attn_fwd(
     USE_INT64_STRIDES: tl.constexpr,
     ENABLE_SINK: tl.constexpr,
     SLIDING_WINDOW: tl.constexpr,
+    SWIZZLE: tl.constexpr,
 ):
     NUM_BLOCKS = (SEQLEN_Q + BLOCK_M - 1) // BLOCK_M
     # calculate offsets
@@ -370,9 +371,15 @@ def _attn_fwd(
     )  # workgroup id ranging: 0,1,2,...., (BATCH * NUM_Q_HEADS * NUM_BLOCKS - 1)
     # num blocks along seqlen
 
-    # Apply head-first spatial swizzling for MI350x optimization
-    # This groups attention heads spatially to achieve 80-97% L2 cache hit rates
-    off_q_head, start_m, off_z = remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_XCD)
+    # SWIZZLE=0: block-first (synthetic baseline, pure streaming)
+    # SWIZZLE=1: head-first spatial (XCD-aware, one head per XCD at a time)
+    if SWIZZLE == 0:
+        start_m = wid % NUM_BLOCKS
+        off_q_head = (wid // NUM_BLOCKS) % NUM_Q_HEADS
+        off_z = wid // (NUM_BLOCKS * NUM_Q_HEADS)
+    else:
+        NUM_QUERIES_PER_KV: tl.constexpr = NUM_Q_HEADS // NUM_K_HEADS
+        off_q_head, start_m, off_z = remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_PER_KV, NUM_XCD)
 
     # offsets
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)

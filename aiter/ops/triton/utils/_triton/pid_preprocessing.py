@@ -137,33 +137,74 @@ def remap_xcd_head_first(head_id, NUM_HEADS, NUM_XCDS: tl.constexpr = 8):
     return remapped_head
 
 
+
+
 @triton.jit
-def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_XCDS: tl.constexpr = 8):
+def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_PER_KV: tl.constexpr, NUM_XCDS: tl.constexpr = 8):
     """
-    Head-first workgroup remapping for spatial optimization in attention kernels.
-    Ensures all blocks of same attention head are mapped to same XCD for maximum cache locality.
+    GQA-aware head-first workgroup decomposition for spatial cache optimization.
 
-    This is the core implementation of the head-first swizzling technique that provides
-    massive cache performance improvements on chiplet-based GPU architectures.
+    For GQA (Grouped Query Attention), we group query heads by their KV head:
+    - Each KV head is used by NUM_QUERIES_PER_KV query heads
+    - Map each KV head group to an XCD to maximize KV cache locality
+    
+    Example: HQ=128, HK=8, NUM_XCDS=8, NUM_QUERIES_PER_KV=16
+    - XCD 0: KV head 0 -> query heads 0-15
+    - XCD 1: KV head 1 -> query heads 16-31
+    - ...
+    - XCD 7: KV head 7 -> query heads 112-127
 
-    Args:
-        wid: Original workgroup ID
-        NUM_Q_HEADS: Number of query heads
-        NUM_BLOCKS: Number of blocks per sequence
-        BATCH: Batch size
-        NUM_XCDS: Number of XCDs for spatial mapping
-
-    Returns:
-        spatial_head: Spatially-remapped head ID
-        start_m: Block position within sequence (unchanged)
-        off_z: Batch offset (unchanged)
+    Hardware assigns WG wid to XCD = wid % NUM_XCDS (round-robin).
+    This remapping ensures all query heads sharing a KV head are processed
+    on the same XCD, keeping that KV head data hot in L2.
     """
-    # Extract original components from workgroup ID
-    original_head = wid % NUM_Q_HEADS
-    start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
-    off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
+    xcd = wid % NUM_XCDS
+    pos = wid // NUM_XCDS
+    
+    # For MHA (NUM_QUERIES_PER_KV == 1), use original head-first logic
+    if NUM_QUERIES_PER_KV == 1:
+        wgs_per_head = NUM_BLOCKS * BATCH
+        local_head_idx = pos // wgs_per_head
+        remainder = pos % wgs_per_head
+        off_z = remainder // NUM_BLOCKS
+        start_m = remainder % NUM_BLOCKS
+        off_q_head = local_head_idx * NUM_XCDS + xcd
+        # Fallback for non-divisible case
+        if off_q_head >= NUM_Q_HEADS:
+            off_q_head = wid % NUM_Q_HEADS
+            start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
+            off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
+        return off_q_head, start_m, off_z
+    
+    # GQA logic: group by KV head
+    # Each KV head group has NUM_QUERIES_PER_KV query heads
+    wgs_per_kv_group = NUM_QUERIES_PER_KV * NUM_BLOCKS * BATCH
+    
+    # Which KV head group (assigned to this XCD)
+    local_kv_group_idx = pos // wgs_per_kv_group
+    remainder = pos % wgs_per_kv_group
+    
+    # Within the KV group: which query head (0 to NUM_QUERIES_PER_KV-1)
+    local_q_in_group = remainder // (NUM_BLOCKS * BATCH)
+    remainder2 = remainder % (NUM_BLOCKS * BATCH)
+    
+    # Batch and block within the query head
+    off_z = remainder2 // NUM_BLOCKS
+    start_m = remainder2 % NUM_BLOCKS
+    
+    # Calculate global KV head: each XCD gets KV heads {xcd, xcd+8, xcd+16, ...}
+    kv_head = local_kv_group_idx * NUM_XCDS + xcd
+    
+    # Calculate global query head from KV head
+    off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
+    
+    # Fallback for out-of-bounds
+    NUM_KV_HEADS = NUM_Q_HEADS // NUM_QUERIES_PER_KV
+    if kv_head >= NUM_KV_HEADS or off_q_head >= NUM_Q_HEADS:
+        # Fall back to simple round-robin
+        off_q_head = wid % NUM_Q_HEADS
+        start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
+        off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
+    
+    return off_q_head, start_m, off_z
 
-    # Apply head-first spatial remapping for cache locality
-    spatial_head = remap_xcd_head_first(original_head, NUM_Q_HEADS, NUM_XCDS)
-
-    return spatial_head, start_m, off_z
