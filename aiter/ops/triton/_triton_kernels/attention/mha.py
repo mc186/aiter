@@ -371,12 +371,13 @@ def _attn_fwd(
     )  # workgroup id ranging: 0,1,2,...., (BATCH * NUM_Q_HEADS * NUM_BLOCKS - 1)
     # num blocks along seqlen
 
-    # SWIZZLE=0: block-first (synthetic baseline, pure streaming)
-    # SWIZZLE=1: head-first spatial (XCD-aware, one head per XCD at a time)
+    # SWIZZLE=0: match main branch (head-first with XCD remap, no spatial optimization)
+    # SWIZZLE=1: GQA-aware head-first spatial (XCD-aware, GQA groups)
     if SWIZZLE == 0:
-        start_m = wid % NUM_BLOCKS
-        off_q_head = (wid // NUM_BLOCKS) % NUM_Q_HEADS
-        off_z = wid // (NUM_BLOCKS * NUM_Q_HEADS)
+        off_q_head = wid % NUM_Q_HEADS
+        off_q_head = remap_xcd(off_q_head, NUM_Q_HEADS, NUM_XCD)
+        start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
+        off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
     else:
         NUM_QUERIES_PER_KV: tl.constexpr = NUM_Q_HEADS // NUM_K_HEADS
         off_q_head, start_m, off_z = remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_PER_KV, NUM_XCD)
