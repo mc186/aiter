@@ -176,35 +176,26 @@ def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_
             off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
         return off_q_head, start_m, off_z
     
-    # GQA logic: group by KV head
-    # Each KV head group has NUM_QUERIES_PER_KV query heads
-    wgs_per_kv_group = NUM_QUERIES_PER_KV * NUM_BLOCKS * BATCH
-    
-    # Which KV head group (assigned to this XCD)
-    local_kv_group_idx = pos // wgs_per_kv_group
-    remainder = pos % wgs_per_kv_group
-    
-    # Within the KV group: which query head (0 to NUM_QUERIES_PER_KV-1)
-    local_q_in_group = remainder // (NUM_BLOCKS * BATCH)
-    remainder2 = remainder % (NUM_BLOCKS * BATCH)
-    
-    # Batch and block within the query head
-    off_z = remainder2 // NUM_BLOCKS
-    start_m = remainder2 % NUM_BLOCKS
-    
-    # Calculate global KV head: each XCD gets KV heads {xcd, xcd+8, xcd+16, ...}
-    kv_head = local_kv_group_idx * NUM_XCDS + xcd
-    
-    # Calculate global query head from KV head
-    off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
-    
-    # Fallback for out-of-bounds
+    # GQA logic: Each XCD handles one KV head exclusively
     NUM_KV_HEADS = NUM_Q_HEADS // NUM_QUERIES_PER_KV
+    kv_head = xcd % NUM_KV_HEADS  # XCD 0→KV 0, XCD 1→KV 1, etc.
+
+    # Q-head-first: finish all blocks for each Q head before moving to next
+    # Cycling: Q0[blk0-511], Q1[blk0-511], Q2[blk0-511], ...
+    wgs_per_query_head = NUM_BLOCKS * BATCH
+    local_q_in_group = (pos // wgs_per_query_head) % NUM_QUERIES_PER_KV
+    remainder = pos % wgs_per_query_head
+
+    off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
+    off_z = remainder // NUM_BLOCKS
+    start_m = remainder % NUM_BLOCKS
+
+    # Bounds check (should rarely trigger)
     if kv_head >= NUM_KV_HEADS or off_q_head >= NUM_Q_HEADS:
-        # Fall back to simple round-robin
+        # Fallback to simple round-robin
         off_q_head = wid % NUM_Q_HEADS
         start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
         off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
-    
+
     return off_q_head, start_m, off_z
 
