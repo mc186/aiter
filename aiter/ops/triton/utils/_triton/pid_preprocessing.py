@@ -140,6 +140,25 @@ def remap_xcd_head_first(head_id, NUM_HEADS, NUM_XCDS: tl.constexpr = 8):
 
 
 @triton.jit
+
+@triton.jit
+def outside_in_block_index(block_pos: tl.constexpr, NUM_BLOCKS: tl.constexpr):
+    """
+    Convert sequential block position to outside-in (sandwich) ordering.
+
+    This balances causal attention workload by alternating between
+    light blocks (early in sequence) and heavy blocks (late in sequence).
+
+    Pattern: B0, B_last, B1, B_(last-1), B2, B_(last-2), ...
+    Example (N=8): 0, 7, 1, 6, 2, 5, 3, 4
+    """
+    is_even = (block_pos % 2) == 0
+    start_block = block_pos // 2
+    end_block = NUM_BLOCKS - 1 - (block_pos // 2)
+    return tl.where(is_even, start_block, end_block)
+
+
+
 def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_PER_KV: tl.constexpr, NUM_XCDS: tl.constexpr = 8):
     """
     GQA-aware head-first workgroup decomposition for spatial cache optimization.
@@ -188,7 +207,10 @@ def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_
 
     off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
     off_z = remainder // NUM_BLOCKS
-    start_m = remainder % NUM_BLOCKS
+    # Outside-in block ordering for causal load balancing
+
+    block_pos_in_q = remainder % NUM_BLOCKS
+    start_m = outside_in_block_index(block_pos_in_q, NUM_BLOCKS)
 
     # Bounds check (should rarely trigger)
     if kv_head >= NUM_KV_HEADS or off_q_head >= NUM_Q_HEADS:
