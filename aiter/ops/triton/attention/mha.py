@@ -303,6 +303,7 @@ def _flash_attn_forward(
             VARLEN=is_varlen,
             BATCH=batch,
             NUM_XCD=get_num_xcds(),
+            SWIZZLE=int(os.environ.get('AITER_SWIZZLE', '0')),
             USE_INT64_STRIDES=_USE_INT64_STRIDES,
             ENABLE_SINK=sink is not None,
             SLIDING_WINDOW=sliding_window,
