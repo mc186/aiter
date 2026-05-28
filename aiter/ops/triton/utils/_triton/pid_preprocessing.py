@@ -139,7 +139,6 @@ def remap_xcd_head_first(head_id, NUM_HEADS, NUM_XCDS: tl.constexpr = 8):
 
 
 
-@triton.jit
 
 @triton.jit
 def outside_in_block_index(block_pos: tl.constexpr, NUM_BLOCKS: tl.constexpr):
