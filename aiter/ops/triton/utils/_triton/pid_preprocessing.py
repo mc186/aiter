@@ -155,6 +155,7 @@ def outside_in_block_index(block_pos: tl.constexpr, NUM_BLOCKS: tl.constexpr):
     start_block = block_pos // 2
     end_block = NUM_BLOCKS - 1 - (block_pos // 2)
     return tl.where(is_even, start_block, end_block)
+@triton.jit
 
 
 
