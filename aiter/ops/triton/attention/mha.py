@@ -2,6 +2,7 @@
 # Copyright (C) 2024-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 from typing import Literal, Optional, Tuple, Union
+import os
 import torch
 import triton
 import triton.language as tl
@@ -302,6 +303,7 @@ def _flash_attn_forward(
             VARLEN=is_varlen,
             BATCH=batch,
             NUM_XCD=get_num_xcds(),
+            SWIZZLE=int(os.environ.get('AITER_SWIZZLE', '0')),
             USE_INT64_STRIDES=_USE_INT64_STRIDES,
             ENABLE_SINK=sink is not None,
             SLIDING_WINDOW=sliding_window,
