@@ -176,24 +176,55 @@ def remap_workgroup_head_first(wid, NUM_Q_HEADS, NUM_BLOCKS, BATCH, NUM_QUERIES_
             off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
         return off_q_head, start_m, off_z
     
-    # GQA logic: Each XCD handles one KV head exclusively
-    NUM_KV_HEADS = NUM_Q_HEADS // NUM_QUERIES_PER_KV
-    kv_head = xcd % NUM_KV_HEADS  # XCD 0→KV 0, XCD 1→KV 1, etc.
+    # GQA block-first mapping. Handles three regimes by NUM_KV_HEADS vs NUM_XCDS:
+    #   HK == NUM_XCDS:  1 KV head per XCD (aligned, original behavior)
+    #   HK >  NUM_XCDS:  each XCD owns ceil(HK/NXCD) KV heads, processed one fully
+    #                    (all blocks x all Q-in-group) before the next, so KV-head
+    #                    working set stays resident in L2 between transitions
+    #   HK <  NUM_XCDS:  NXCD/HK XCDs share each KV head; the XCDs sharing a head
+    #                    split the per-KV-group work (Q-heads-in-group + blocks)
+    NUM_KV_HEADS: tl.constexpr = NUM_Q_HEADS // NUM_QUERIES_PER_KV
 
-    # Block-first: finish each block across all Q heads before moving to next block
-    # Cycling: blk0[Q0-15], blk1[Q0-15], blk2[Q0-15], ...
-    wgs_per_block = NUM_QUERIES_PER_KV * BATCH
-    start_m = (pos // wgs_per_block) % NUM_BLOCKS
-    remainder = pos % wgs_per_block
+    if NUM_KV_HEADS >= NUM_XCDS:
+        # Case A (HK == NXCD) or Case B (HK > NXCD).
+        NUM_KV_REPLICAS: tl.constexpr = (NUM_KV_HEADS + NUM_XCDS - 1) // NUM_XCDS
+        wgs_per_block = NUM_QUERIES_PER_KV * BATCH
+        if NUM_KV_REPLICAS == 1:
+            # Aligned: original code path, unchanged.
+            kv_head = xcd % NUM_KV_HEADS
+            start_m = (pos // wgs_per_block) % NUM_BLOCKS
+            remainder = pos % wgs_per_block
+            off_z = remainder // NUM_QUERIES_PER_KV
+            local_q_in_group = remainder % NUM_QUERIES_PER_KV
+            off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
+        else:
+            # HK > NXCD: kv_slot picks which of XCD's owned KV heads to process now.
+            wgs_per_kv_group = NUM_QUERIES_PER_KV * NUM_BLOCKS * BATCH
+            kv_slot = pos // wgs_per_kv_group
+            kv_head = xcd + kv_slot * NUM_XCDS
+            local = pos % wgs_per_kv_group
+            start_m = (local // (NUM_QUERIES_PER_KV * BATCH)) % NUM_BLOCKS
+            remainder = local % (NUM_QUERIES_PER_KV * BATCH)
+            off_z = remainder // NUM_QUERIES_PER_KV
+            local_q_in_group = remainder % NUM_QUERIES_PER_KV
+            off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
+    else:
+        # Case C: HK < NXCD. Group XCDs into clusters of size NXCD_PER_KV;
+        # each cluster owns one KV head. XCDs in the same cluster split work.
+        NXCD_PER_KV: tl.constexpr = NUM_XCDS // NUM_KV_HEADS
+        xcd_in_cluster = xcd // NUM_KV_HEADS
+        kv_head = xcd % NUM_KV_HEADS
+        wgs_per_kv_group = NUM_QUERIES_PER_KV * NUM_BLOCKS * BATCH
+        wgs_per_xcd_in_cluster = wgs_per_kv_group // NXCD_PER_KV
+        local = (pos % wgs_per_xcd_in_cluster) + xcd_in_cluster * wgs_per_xcd_in_cluster
+        start_m = (local // (NUM_QUERIES_PER_KV * BATCH)) % NUM_BLOCKS
+        remainder = local % (NUM_QUERIES_PER_KV * BATCH)
+        off_z = remainder // NUM_QUERIES_PER_KV
+        local_q_in_group = remainder % NUM_QUERIES_PER_KV
+        off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
 
-    off_z = remainder // NUM_QUERIES_PER_KV
-    local_q_in_group = remainder % NUM_QUERIES_PER_KV
-
-    off_q_head = kv_head * NUM_QUERIES_PER_KV + local_q_in_group
-
-    # Bounds check (should rarely trigger)
+    # Bounds check (triggers for non-divisible edge cases).
     if kv_head >= NUM_KV_HEADS or off_q_head >= NUM_Q_HEADS:
-        # Fallback to simple round-robin
         off_q_head = wid % NUM_Q_HEADS
         start_m = (wid // NUM_Q_HEADS) % NUM_BLOCKS
         off_z = (wid // (NUM_BLOCKS * NUM_Q_HEADS)) % BATCH
